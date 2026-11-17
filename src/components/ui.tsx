@@ -1,0 +1,153 @@
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { Definition, Member } from '../lib/types';
+import { SWATCHES, textOn } from '../lib/hooks';
+
+/** Text input that keeps its own value while typing and saves on blur / Enter. */
+export function TextField(props: {
+  value: string;
+  onCommit: (v: string) => void;
+  placeholder?: string;
+  label?: string;
+  multiline?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  type?: string;
+  autoFocus?: boolean;
+}) {
+  const [v, setV] = useState(props.value);
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setV(props.value);
+  }, [props.value]);
+  const commit = () => {
+    focused.current = false;
+    if (v !== props.value) props.onCommit(v);
+  };
+  const common = {
+    value: v,
+    placeholder: props.placeholder,
+    'aria-label': props.label,
+    className: props.className ?? 'input',
+    style: props.style,
+    autoFocus: props.autoFocus,
+    onFocus: () => (focused.current = true),
+    onBlur: commit,
+  };
+  if (props.multiline) {
+    return <textarea {...common} rows={3} onChange={(e) => setV(e.target.value)} />;
+  }
+  return (
+    <input
+      {...common}
+      type={props.type ?? 'text'}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        if (e.key === 'Escape') {
+          setV(props.value);
+          focused.current = false;
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+    />
+  );
+}
+
+/** Native select fed by a definitions list. */
+export function DefSelect(props: {
+  options: Definition[];
+  value: string | null | undefined;
+  onChange: (id: string | null) => void;
+  label: string;
+  allowEmpty?: boolean;
+  className?: string;
+}) {
+  const current = props.options.find((o) => o.id === props.value);
+  return (
+    <span className={'select-wrap ' + (props.className ?? '')}>
+      <span className="dot" style={{ background: current?.color ?? 'transparent', borderColor: current ? 'transparent' : '#5a544a' }} />
+      <select aria-label={props.label} value={props.value ?? ''} onChange={(e) => props.onChange(e.target.value || null)}>
+        {(props.allowEmpty || !current) && <option value="">—</option>}
+        {props.options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+export function MemberBadge({ m, size = 26 }: { m: Member; size?: number }) {
+  return (
+    <span className="badge" title={m.name} style={{ width: size, height: size, background: m.color, color: textOn(m.color), fontSize: size * 0.38 }}>
+      {m.initials}
+    </span>
+  );
+}
+
+export function Tag({ def, fallback }: { def?: Definition; fallback?: string }) {
+  if (!def) return <span className="tag muted">{fallback ?? '—'}</span>;
+  return (
+    <span className="tag" style={{ color: def.color, background: def.color + '26' }}>
+      {def.name}
+    </span>
+  );
+}
+
+export function SwatchPicker({ value, onChange, label }: { value: string; onChange: (c: string) => void; label: string }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="swatches">
+      {SWATCHES.map((c) => (
+        <button
+          key={c}
+          type="button"
+          role="radio"
+          aria-checked={c === value}
+          aria-label={c}
+          className={'swatch' + (c === value ? ' on' : '')}
+          style={{ background: c }}
+          onClick={() => onChange(c)}
+        />
+      ))}
+      <label className="swatch custom" title="Custom colour">
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Custom colour" />
+      </label>
+    </div>
+  );
+}
+
+export function Icon({ name, size = 16 }: { name: 'plus' | 'trash' | 'warn' | 'download' | 'chevron' | 'up' | 'down' | 'search' | 'link' | 'x'; size?: number }) {
+  const paths: Record<string, ReactNode> = {
+    plus: <path d="M12 5v14M5 12h14" />,
+    trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
+    warn: (
+      <>
+        <path d="M12 3l9 16H3z" />
+        <path d="M12 10v4M12 17v.5" />
+      </>
+    ),
+    download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
+    chevron: <path d="M9 6l6 6-6 6" />,
+    up: <path d="M6 15l6-6 6 6" />,
+    down: <path d="M6 9l6 6 6-6" />,
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="M20 20l-4-4" />
+      </>
+    ),
+    link: (
+      <>
+        <path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+        <path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+      </>
+    ),
+    x: <path d="M6 6l12 12M18 6L6 18" />,
+  };
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      {paths[name]}
+    </svg>
+  );
+}
