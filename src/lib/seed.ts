@@ -156,9 +156,10 @@ export function buildSeed(): Record<Table, Row[]> {
     regulator: newId(), bpRegulator: newId(), gear: newId(), pipe: newId(), gauge: newId(), cell: newId(),
     log: newId(), wheat: newId(), tomato: newId(), coffee: newId(), wrench: newId(), belt: newId(), cogs: newId(),
   };
+  let itemSort = 0;
   const item = (id: string, code: string, name: string, category: string, rarity: string, stack: number, value: number, weight: number,
     description: string, sources: { type: string; text: string }[], recipe: any = null, teaches: string | null = null) =>
-    ({ id, code, name, category, rarity, stack, value, weight, description, icon_url: null, sources, recipe, teaches });
+    ({ id, code, name, category, rarity, stack, value, weight, description, icon_url: null, sources, recipe, teaches, sort: itemSort++ });
   const items = [
     item(it.regulator, 'ITM_SteamValveRegulator', 'Steam Valve Regulator', cat.component, rar.uncommon, 20, 35, 1.2,
       'Keeps pressure steady in boilers and steam lines.', [{ type: src.crafted, text: 'Workbench recipe' }],

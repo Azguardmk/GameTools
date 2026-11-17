@@ -65,8 +65,10 @@ create table if not exists items (
   -- { "station": <definition id>, "time": "8 s", "learned_from": "...", "ingredients": [{ "item": <item id>, "qty": 2 }] } or null
   recipe jsonb,
   -- for blueprints: the item id this blueprint teaches
-  teaches uuid
+  teaches uuid,
+  sort int not null default 0
 );
+alter table items add column if not exists sort int not null default 0;
 
 -- Quests
 create table if not exists quest_chains (

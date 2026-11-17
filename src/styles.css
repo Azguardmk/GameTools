@@ -139,7 +139,7 @@ textarea.input { padding: 8px 10px; resize: vertical; line-height: 1.45; }
 .list-row > .grow { flex: 1; min-width: 0; }
 
 /* ---------- items ---------- */
-.irow { display: grid; grid-template-columns: minmax(240px, 2fr) 140px 120px 80px 120px 110px; min-width: 820px; width: 100%; align-items: center; padding: 0; border: none; border-bottom: 1px solid #22201d; border-left: 3px solid transparent; background: var(--row); text-align: left; cursor: pointer; font-size: 13px; }
+.irow { display: grid; grid-template-columns: 76px minmax(240px, 2fr) 140px 120px 80px 120px 110px; min-width: 896px; width: 100%; align-items: center; padding: 0; border: none; border-bottom: 1px solid #22201d; border-left: 3px solid transparent; background: var(--row); text-align: left; cursor: pointer; font-size: 13px; }
 .irow:hover { background: #1a1815; }
 .irow.sel { background: #221f1b; border-left-color: var(--accent); }
 .irow.head { cursor: default; background: var(--panel-2); border-bottom-color: var(--line-2); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-2); position: sticky; top: 0; z-index: 2; }
@@ -262,3 +262,8 @@ select option:checked { background: #a9d39a; color: #000; }
 .flow-wrap .reroute-node .react-flow__handle.reroute-handle { width: 10px; height: 10px; border: none; background: transparent; opacity: 0; }
 .flow-wrap .reroute-node:hover .react-flow__handle.reroute-handle { opacity: 1; background: #c9c1b3; }
 .reroute-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #3a362f; border: 2px solid #c9c1b3; }
+
+/* Item list: order arrows and the clickable name */
+.order-cell { display: flex; gap: 0; padding: 4px 4px !important; }
+.irow-name { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.irow.head > span:first-child { padding-left: 14px; }

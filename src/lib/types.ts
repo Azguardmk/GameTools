@@ -85,6 +85,7 @@ export interface Item {
   sources: ItemSource[];
   recipe: Recipe | null;
   teaches: string | null;
+  sort: number; // position in the item list (set with the up / down arrows)
 }
 
 export interface QuestChain {

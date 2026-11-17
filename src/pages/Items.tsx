@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions } from '../lib/hooks';
 import { enumKey, type Item, type QuestNode, type Recipe } from '../lib/types';
@@ -8,6 +8,10 @@ function mono(name: string) {
   const w = name.replace(/^Blueprint:\s*/i, '').split(/\s+/).filter(Boolean);
   if (!w.length) return '?';
   return (w[0][0] + (w[1] ? w[1][0] : w[0][1] ?? '')).toUpperCase();
+}
+
+function byOrder(a: Item, b: Item) {
+  return (a.sort ?? 0) - (b.sort ?? 0) || a.name.localeCompare(b.name);
 }
 
 function csvCell(v: unknown) {
@@ -54,9 +58,40 @@ export default function ItemsPage() {
     .filter((i) => (cat === 'all' ? true : i.category === cat))
     .filter((i) => !query || (i.name + ' ' + i.code).toLowerCase().includes(query.toLowerCase()))
     .filter((i) => !onlyProblems || !hasSource(i))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byOrder);
 
   const sel = (selId && byId.get(selId)) || filtered[0] || null;
+
+  /** Swaps an item with its neighbour in the list as you see it (filters included). */
+  const move = (it: Item, dir: -1 | 1) => {
+    const idx = filtered.findIndex((x) => x.id === it.id);
+    const other = filtered[idx + dir];
+    if (!other) return;
+    const all = [...items].sort(byOrder);
+    // Make every position unique first (older items may share the same number).
+    const sorts = all.map((x) => x.sort ?? 0);
+    if (new Set(sorts).size !== sorts.length) {
+      all.forEach((x, n) => x.sort !== n && update('items', x.id, { sort: n }));
+      const a = all.findIndex((x) => x.id === it.id);
+      const b = all.findIndex((x) => x.id === other.id);
+      update('items', it.id, { sort: b });
+      update('items', other.id, { sort: a });
+      return;
+    }
+    update('items', it.id, { sort: other.sort });
+    update('items', other.id, { sort: it.sort });
+  };
+
+  // Alt + ↑ / ↓ moves the selected item.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !sel) return;
+      e.preventDefault();
+      move(sel, e.key === 'ArrowUp' ? -1 : 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const newItem = () => {
     const c = cat !== 'all' ? defs.get(cat) : categories[0];
@@ -65,6 +100,7 @@ export default function ItemsPage() {
     insert('items', {
       id, code: (c?.extra.prefix || 'ITM_') + 'NewItem', name: 'New item', category: c?.id ?? null, rarity: rarity?.id ?? null,
       stack: parseInt(c?.extra.default_stack || '1') || 1, value: 0, weight: 0, description: '', icon_url: null, sources: [], recipe: null, teaches: null,
+      sort: items.length ? Math.max(...items.map((i) => i.sort ?? 0)) + 1 : 0,
     });
     setSelId(id);
     setQuery('');
@@ -74,7 +110,7 @@ export default function ItemsPage() {
   const exportCsv = () => {
     const head = ['---', 'DisplayName', 'Category', 'Rarity', 'MaxStack', 'Value', 'Weight', 'Description', 'CraftStation', 'Ingredients', 'Teaches'];
     const lines = [head.join(',')];
-    for (const it of [...items].sort((a, b) => a.code.localeCompare(b.code))) {
+    for (const it of [...items].sort(byOrder)) {
       lines.push(
         [
           it.code || enumKey(it.name),
@@ -136,6 +172,7 @@ export default function ItemsPage() {
       <div className="split">
         <section className="main" aria-label="Item list" style={{ border: '1px solid var(--line)', borderRadius: 12, background: 'var(--row)', overflow: 'auto', maxHeight: 'calc(100vh - 230px)' }}>
           <div className="irow head">
+            <span>ORDER</span>
             <span>ITEM</span>
             <span>CATEGORY</span>
             <span>RARITY</span>
@@ -143,14 +180,22 @@ export default function ItemsPage() {
             <span>SOURCES</span>
             <span>USED IN</span>
           </div>
-          {filtered.map((it) => {
+          {filtered.map((it, i) => {
             const c = defs.get(it.category);
             const r = defs.get(it.rarity);
             const srcCount = it.sources.length + (it.recipe ? 1 : 0) + (links.fromQuests.get(it.id)?.length ?? 0);
             const useCount = (links.inRecipes.get(it.id)?.length ?? 0) + (links.neededByQuests.get(it.id)?.length ?? 0);
             return (
-              <button key={it.id} type="button" className={'irow' + (sel?.id === it.id ? ' sel' : '')} aria-pressed={sel?.id === it.id} onClick={() => setSelId(it.id)}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div key={it.id} className={'irow' + (sel?.id === it.id ? ' sel' : '')} onClick={() => setSelId(it.id)}>
+                <span className="order-cell" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" className="icon-btn" aria-label={'Move ' + it.name + ' up'} disabled={i === 0} onClick={() => move(it, -1)}>
+                    <Icon name="up" size={14} />
+                  </button>
+                  <button type="button" className="icon-btn" aria-label={'Move ' + it.name + ' down'} disabled={i === filtered.length - 1} onClick={() => move(it, 1)}>
+                    <Icon name="down" size={14} />
+                  </button>
+                </span>
+                <button type="button" className="irow-name" aria-pressed={sel?.id === it.id} onClick={() => setSelId(it.id)}>
                   <span className="tile" style={{ background: (c?.color ?? '#3a362f') + '33', borderColor: r?.color ?? '#3a362f' }}>
                     {it.icon_url ? <img src={it.icon_url} alt="" /> : mono(it.name)}
                   </span>
@@ -158,7 +203,7 @@ export default function ItemsPage() {
                     <strong style={{ fontSize: 14, color: '#f1ebdf' }}>{it.name || 'Untitled'}</strong>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{it.code}</span>
                   </span>
-                </span>
+                </button>
                 <span style={{ color: '#d6cfc2' }}>{c?.name ?? '—'}</span>
                 <span style={{ color: r?.color ?? 'var(--muted)', fontWeight: 600 }}>{r?.name ?? '—'}</span>
                 <span className="muted">{it.stack}</span>
@@ -167,7 +212,7 @@ export default function ItemsPage() {
                   {srcCount ? `${srcCount} source${srcCount === 1 ? '' : 's'}` : 'None'}
                 </span>
                 <span className="muted">{useCount ? `${useCount} place${useCount === 1 ? '' : 's'}` : '—'}</span>
-              </button>
+              </div>
             );
           })}
           {filtered.length === 0 && <div className="empty">No items match.</div>}
