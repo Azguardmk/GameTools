@@ -190,3 +190,6 @@ textarea.input { padding: 8px 10px; resize: vertical; line-height: 1.45; }
 /* Open dropdown lists: light green with black text so options are easy to read. */
 select option, select optgroup { background: #cfe8c4; color: #000; }
 select option:checked { background: #a9d39a; color: #000; }
+
+/* Full-text bubble for fields whose text doesn't fit */
+.tooltip { position: fixed; z-index: 2000; max-width: min(420px, calc(100vw - 16px)); padding: 10px 12px; border-radius: 8px; background: #2a2620; border: 1px solid #4a453c; color: var(--text); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: 0 12px 32px rgba(0,0,0,0.6); pointer-events: none; }

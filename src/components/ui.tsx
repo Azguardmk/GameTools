@@ -1,6 +1,43 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import React, { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { Definition, Member } from '../lib/types';
 import { SWATCHES, textOn } from '../lib/hooks';
+
+/** Shows the full text in a wrapping bubble when a field is too narrow for it. */
+function useOverflowTip(text: string) {
+  const [tip, setTip] = useState<{ top: number; left: number; above: boolean } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const show = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
+    clearTimeout(timer.current);
+    if (!el || !text || document.activeElement === el) return;
+    const cut = el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+    if (!cut) return;
+    timer.current = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      const above = r.bottom + 160 > window.innerHeight;
+      setTip({ top: above ? r.top - 6 : r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 440)), above });
+    }, 250);
+  };
+  const hide = () => {
+    clearTimeout(timer.current);
+    setTip(null);
+  };
+  useEffect(() => {
+    if (!tip) return;
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [tip]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const bubble =
+    tip &&
+    createPortal(
+      <div className="tooltip" role="tooltip" style={{ top: tip.top, left: tip.left, transform: tip.above ? 'translateY(-100%)' : undefined }}>
+        {text}
+      </div>,
+      document.body,
+    );
+  return { show, hide, bubble };
+}
 
 /** Text input that keeps its own value while typing and saves on blur / Enter. */
 export function TextField(props: {
@@ -16,6 +53,7 @@ export function TextField(props: {
 }) {
   const [v, setV] = useState(props.value);
   const focused = useRef(false);
+  const tip = useOverflowTip(v);
   useEffect(() => {
     if (!focused.current) setV(props.value);
   }, [props.value]);
@@ -30,26 +68,39 @@ export function TextField(props: {
     className: props.className ?? 'input',
     style: props.style,
     autoFocus: props.autoFocus,
-    onFocus: () => (focused.current = true),
+    onFocus: () => {
+      focused.current = true;
+      tip.hide();
+    },
     onBlur: commit,
+    onMouseEnter: (e: React.MouseEvent<HTMLInputElement | HTMLTextAreaElement>) => tip.show(e.currentTarget),
+    onMouseLeave: tip.hide,
   };
   if (props.multiline) {
-    return <textarea {...common} rows={3} onChange={(e) => setV(e.target.value)} />;
+    return (
+      <>
+        <textarea {...common} rows={3} onChange={(e) => setV(e.target.value)} />
+        {tip.bubble}
+      </>
+    );
   }
   return (
-    <input
-      {...common}
-      type={props.type ?? 'text'}
-      onChange={(e) => setV(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        if (e.key === 'Escape') {
-          setV(props.value);
-          focused.current = false;
-          (e.target as HTMLInputElement).blur();
-        }
-      }}
-    />
+    <>
+      <input
+        {...common}
+        type={props.type ?? 'text'}
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') {
+            setV(props.value);
+            focused.current = false;
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
+      {tip.bubble}
+    </>
   );
 }
 
