@@ -177,6 +177,8 @@ export default function ItemsPage() {
             <span>CATEGORY</span>
             <span>RARITY</span>
             <span>STACK</span>
+            <span>STATION</span>
+            <span>CRAFT TIME</span>
             <span>SOURCES</span>
             <span>USED IN</span>
           </div>
@@ -207,6 +209,8 @@ export default function ItemsPage() {
                 <span style={{ color: '#d6cfc2' }}>{c?.name ?? '—'}</span>
                 <span style={{ color: r?.color ?? 'var(--muted)', fontWeight: 600 }}>{r?.name ?? '—'}</span>
                 <span className="muted">{it.stack}</span>
+                <span style={{ color: it.recipe ? '#d6cfc2' : 'var(--muted)' }}>{it.recipe ? defs.get(it.recipe.station ?? '')?.name ?? '—' : '—'}</span>
+                <span style={{ color: it.recipe?.time ? '#d6cfc2' : 'var(--muted)' }}>{it.recipe?.time || '—'}</span>
                 <span style={{ color: srcCount ? 'var(--text-2)' : 'var(--danger)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {!srcCount && <Icon name="warn" size={14} />}
                   {srcCount ? `${srcCount} source${srcCount === 1 ? '' : 's'}` : 'None'}
