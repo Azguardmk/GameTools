@@ -267,3 +267,13 @@ select option:checked { background: #a9d39a; color: #000; }
 .order-cell { display: flex; gap: 0; padding: 4px 4px !important; }
 .irow-name { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: none; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .irow.head > span:first-child { padding-left: 14px; }
+
+/* Character picker: full list every time, with search and "add new" */
+.combo { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid #4a453c; background: #1d1b18; color: var(--text); text-align: left; cursor: pointer; }
+.combo:hover { border-color: var(--line-2); background: #221f1b; }
+.combo .dot, .combo-opt .dot { flex: none; width: 10px; height: 10px; border-radius: 3px; border: 1px dashed transparent; }
+.combo-menu { gap: 6px; }
+.combo-opt { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border: none; border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-size: 13px; }
+.combo-opt.hi { background: #2e2a24; }
+.combo-opt[aria-selected='true'] { font-weight: 600; }
+.combo-opt.special { color: var(--accent-text); }

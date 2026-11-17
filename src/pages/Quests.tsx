@@ -1,4 +1,5 @@
-import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import {
   Background,
@@ -1175,44 +1176,125 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
 
 // ---------- small helpers ----------
 
-/** Type a character's name, or pick one from the list. A new name is added to Definitions → Characters / NPCs. */
+/**
+ * Pick a character from the full list, or type a new name to add one to Definitions → Characters / NPCs.
+ * The list always shows every character, even when one is already chosen.
+ */
 function CharacterField({ value, fallback, label, onChange }: { value: string | null; fallback?: string; label: string; onChange: (id: string | null, name: string) => void }) {
   const { defs } = useContext(QuestCtx);
-  const listId = useId();
   const chars = defs.list('character');
   const cur = defs.get(value);
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [hi, setHi] = useState(0);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+
+  const shown = chars.filter((c) => !q.trim() || c.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const exact = chars.some((c) => c.name.toLowerCase() === q.trim().toLowerCase());
+  type Opt = { key: string; label: string; run: () => void; color?: string; current?: boolean };
+  const opts: Opt[] = [
+    ...shown.map((c) => ({ key: c.id, label: c.name, color: c.color, current: c.id === value, run: () => pick(c.id, c.name) })),
+    ...(q.trim() && !exact ? [{ key: '__new', label: `+ Add “${q.trim()}” as a new character`, run: () => addNew(q.trim()) }] : []),
+    ...(value || fallback ? [{ key: '__none', label: 'No quest giver / speaker', run: () => pick(null, '') }] : []),
+  ];
+
+  function pick(id: string | null, name: string) {
+    onChange(id, name);
+    setOpen(false);
+  }
+  function addNew(name: string) {
+    const id = newId();
+    insert('definitions', {
+      id,
+      list: 'character',
+      name,
+      color: SWATCHES[chars.length % SWATCHES.length],
+      sort: chars.length ? Math.max(...chars.map((c) => c.sort)) + 1 : 0,
+      extra: { district: '', role: '' },
+    });
+    pick(id, name);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 240) });
+    setQ('');
+    setHi(Math.max(0, chars.findIndex((c) => c.id === value)));
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as globalThis.Node;
+      if (!menu.current?.contains(t) && !btn.current?.contains(t)) setOpen(false);
+    };
+    const onScroll = (e: Event) => !menu.current?.contains(e.target as globalThis.Node) && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   return (
-    <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-      {cur && <span style={{ position: 'absolute', left: 10, width: 10, height: 10, borderRadius: 3, background: cur.color, pointerEvents: 'none' }} />}
-      <TextField
-        value={cur?.name ?? fallback ?? ''}
-        label={label}
-        placeholder="Type a name or pick one"
-        list={listId}
-        style={{ paddingLeft: cur ? 28 : undefined }}
-        onCommit={(raw) => {
-          const name = raw.trim();
-          if (!name) return onChange(null, '');
-          const match = chars.find((c) => c.name.toLowerCase() === name.toLowerCase());
-          if (match) return onChange(match.id, match.name);
-          const id = newId();
-          insert('definitions', {
-            id,
-            list: 'character',
-            name,
-            color: SWATCHES[chars.length % SWATCHES.length],
-            sort: chars.length ? Math.max(...chars.map((c) => c.sort)) + 1 : 0,
-            extra: { district: '', role: '' },
-          });
-          onChange(id, name);
-        }}
-      />
-      <datalist id={listId}>
-        {chars.map((c) => (
-          <option key={c.id} value={c.name} />
-        ))}
-      </datalist>
-    </span>
+    <>
+      <button ref={btn} type="button" className="combo" aria-haspopup="listbox" aria-expanded={open} aria-label={label + ': ' + (cur?.name ?? fallback ?? 'none')} onClick={() => setOpen(!open)}>
+        <span className="dot" style={{ background: cur?.color ?? 'transparent', borderColor: cur ? 'transparent' : '#5a544a' }} />
+        <span className="grow" style={{ color: cur || fallback ? 'var(--text)' : '#7a7469', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {cur?.name ?? fallback ?? 'Pick or type a name'}
+        </span>
+        <Icon name="down" size={14} />
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div ref={menu} className="popover combo-menu" style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}>
+            <input
+              className="input"
+              autoFocus
+              placeholder="Search or type a new name"
+              aria-label="Search characters"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setHi(0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setHi((h) => Math.min(opts.length - 1, h + 1));
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setHi((h) => Math.max(0, h - 1));
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  opts[hi]?.run();
+                } else if (e.key === 'Escape') setOpen(false);
+              }}
+            />
+            <div role="listbox" aria-label={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 260, overflow: 'auto' }}>
+              {opts.map((o, i) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  role="option"
+                  aria-selected={!!o.current}
+                  className={'combo-opt' + (i === hi ? ' hi' : '') + (o.key.startsWith('__') ? ' special' : '')}
+                  onMouseEnter={() => setHi(i)}
+                  onClick={o.run}
+                >
+                  {o.color && <span className="dot" style={{ background: o.color, position: 'static' }} />}
+                  <span className="grow">{o.label}</span>
+                  {o.current && <span className="muted" style={{ fontSize: 11 }}>current</span>}
+                </button>
+              ))}
+              {opts.length === 0 && <span className="empty" style={{ padding: 8 }}>No characters yet. Type a name to add one.</span>}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
