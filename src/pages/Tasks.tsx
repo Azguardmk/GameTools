@@ -32,7 +32,7 @@ export default function TasksPage() {
   const addTask = (g: TaskGroup) => {
     const inGroup = tasks.filter((t) => t.group_id === g.id);
     insert('tasks', {
-      id: newId(), group_id: g.id, title: '', notes: '', assignees: [], priority: priorities[1]?.id ?? priorities[0]?.id ?? null,
+      id: newId(), group_id: g.id, title: '', notes: '', assignees: who !== 'all' && who !== 'none' ? [who] : [], priority: priorities[1]?.id ?? priorities[0]?.id ?? null,
       status: statuses[0]?.id ?? null, done: false, done_by: null, done_at: null,
       sort: inGroup.length ? Math.max(...inGroup.map((t) => t.sort)) + 1 : 0,
     });
@@ -136,6 +136,11 @@ export default function TasksPage() {
                       {all.length === 0 ? 'No tasks in this group yet.' : 'No tasks match this filter.'}
                     </div>
                   )}
+                  <button type="button" className="add-row" onClick={() => addTask(g)} aria-label={'Add a task to ' + g.name}>
+                    <span className="add-row-inner">
+                      <Icon name="plus" size={14} /> Add task
+                    </span>
+                  </button>
                 </>
               )}
             </div>
