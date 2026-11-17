@@ -46,6 +46,7 @@ export function TextField(props: {
   placeholder?: string;
   label?: string;
   multiline?: boolean;
+  rows?: number;
   className?: string;
   style?: CSSProperties;
   type?: string;
@@ -79,7 +80,7 @@ export function TextField(props: {
   if (props.multiline) {
     return (
       <>
-        <textarea {...common} rows={3} onChange={(e) => setV(e.target.value)} />
+        <textarea {...common} rows={props.rows ?? 3} onChange={(e) => setV(e.target.value)} />
         {tip.bubble}
       </>
     );

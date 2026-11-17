@@ -329,6 +329,7 @@ function QuestsInner() {
               objectives: d.objectives.map((o) => ({ type: name(o.type), text: o.text, count: o.count })),
               requiredItems: d.required_items.map((r) => ({ item: code(r.item), qty: r.qty })),
               rewards: d.rewards.map((r) => ({ type: name(r.type), text: r.text, item: code(r.item), amount: r.amount })),
+              dialogue: { start: d.dialogue?.start ?? '', progress: d.dialogue?.progress ?? '', complete: d.dialogue?.complete ?? '' },
               prerequisites: prereqs(n.id),
             };
           }),
@@ -616,7 +617,7 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <TextField value={d.code} label="Quest ID" onCommit={(v) => set({ code: v.replace(/\s+/g, '') })} style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent-text)' }} />
         <TextField value={d.name} label="Quest name" placeholder="Quest name" onCommit={(v) => set({ name: v })} style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700 }} autoFocus={!d.name} />
-        <TextField multiline value={d.description} label="Description" placeholder="Short description / dialogue notes" onCommit={(v) => set({ description: v })} />
+        <TextField multiline value={d.description} label="Description" placeholder="Short description" onCommit={(v) => set({ description: v })} />
       </div>
 
       <div className="grid2">
@@ -669,6 +670,29 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
             </select>
           </span>
         </label>
+      </div>
+
+      <div className="card-box">
+        <span className="section-label">DIALOGUE</span>
+        {(
+          [
+            ['start', 'When offering the quest', 'What the quest giver says to start the quest'],
+            ['progress', 'While the quest is in progress', 'What they say if the player comes back before finishing'],
+            ['complete', 'When handing in the quest', 'What they say when the player completes it'],
+          ] as const
+        ).map(([key, label, placeholder]) => (
+          <label key={key} className="field">
+            <span className="field-label">{label}</span>
+            <TextField
+              multiline
+              rows={key === 'start' ? 5 : 3}
+              value={d.dialogue?.[key] ?? ''}
+              label={'Dialogue: ' + label}
+              placeholder={placeholder}
+              onCommit={(v) => set({ dialogue: { start: '', progress: '', complete: '', ...d.dialogue, [key]: v } })}
+            />
+          </label>
+        ))}
       </div>
 
       <div className="card-box">

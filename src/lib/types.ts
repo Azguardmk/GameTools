@@ -123,6 +123,8 @@ export interface QuestData {
   objectives: Objective[];
   required_items: { item: string; qty: number }[];
   rewards: Reward[];
+  // What the quest giver says when offering, while in progress, and on hand-in.
+  dialogue?: { start: string; progress: string; complete: string };
 }
 
 export interface QuestNode {

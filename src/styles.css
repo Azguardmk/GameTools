@@ -200,3 +200,10 @@ select option:checked { background: #a9d39a; color: #000; }
 .add-row { display: flex; width: 100%; min-width: 1124px; min-height: 40px; padding: 0; border: none; border-bottom: 1px solid #22201d; background: var(--row); color: var(--muted); cursor: pointer; text-align: left; font-size: 13px; }
 .add-row-inner { position: sticky; left: 0; display: flex; align-items: center; gap: 8px; padding-left: 112px; }
 .add-row:hover { background: #1a1815; color: var(--accent-text); }
+
+/* Quest editor: bigger connection dots that are easy to grab */
+.flow-wrap .react-flow__handle { width: 16px; height: 16px; border: 2px solid #15130f; background: #d9a75e; transition: transform 0.12s; }
+.flow-wrap .react-flow__handle-left { background: #8f897d; }
+.flow-wrap .snode .react-flow__handle-right { background: #c294d6; }
+.flow-wrap .react-flow__handle-left:hover, .flow-wrap .react-flow__handle-left.valid { transform: translate(-50%, -50%) scale(1.35); }
+.flow-wrap .react-flow__handle-right:hover, .flow-wrap .react-flow__handle-right.connectingfrom { transform: translate(50%, -50%) scale(1.35); }
