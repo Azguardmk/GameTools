@@ -94,7 +94,7 @@ export interface QuestChain {
   sort: number;
 }
 
-export type NodeKind = 'quest' | 'condition' | 'choice' | 'external';
+export type NodeKind = 'start' | 'end' | 'quest' | 'dialogue' | 'condition' | 'action' | 'choice' | 'external' | 'note';
 
 export interface Objective {
   type: string | null;
@@ -115,6 +115,7 @@ export interface QuestData {
   description: string;
   level: string;
   giver: string;
+  giver_id?: string | null; // definition id (character)
   type: string | null;
   region: string | null; // definition id (region)
   district: string | null; // definition id (district)
@@ -137,7 +138,7 @@ export interface QuestNode {
   data: Record<string, any>;
 }
 
-export type EdgeKind = 'unlocks' | 'condition' | 'choice' | 'external';
+export type EdgeKind = 'unlocks' | 'condition' | 'choice' | 'external' | 'response';
 
 export interface QuestEdge {
   id: string;
@@ -146,6 +147,8 @@ export interface QuestEdge {
   target: string;
   kind: EdgeKind;
   label: string;
+  // Which output a link leaves from: 'yes' / 'no' on conditions, otherwise null.
+  source_handle: string | null;
 }
 
 export type ListKey =
@@ -153,6 +156,8 @@ export type ListKey =
   | 'rarity'
   | 'station'
   | 'source_type'
+  | 'character'
+  | 'variable'
   | 'quest_type'
   | 'region'
   | 'district'
@@ -168,7 +173,7 @@ export interface ListMeta {
   title: string;
   enumName: string;
   description: string;
-  extras: { key: string; label: string; placeholder?: string; ref?: ListKey }[];
+  extras: { key: string; label: string; placeholder?: string; ref?: ListKey; options?: string[] }[];
 }
 
 export const LISTS: ListMeta[] = [
@@ -182,6 +187,12 @@ export const LISTS: ListMeta[] = [
     description: 'Where recipes are crafted.', extras: [] },
   { key: 'source_type', group: 'Items', title: 'Source types', enumName: 'E_ItemSource',
     description: 'Ways a player can get an item.', extras: [] },
+  { key: 'character', group: 'World', title: 'Characters', enumName: 'E_Character',
+    description: 'NPCs and other speakers. Used as quest givers and as speakers in dialogue nodes.',
+    extras: [{ key: 'district', label: 'District', ref: 'district' }, { key: 'role', label: 'Role', placeholder: 'e.g. Clockmaker' }] },
+  { key: 'variable', group: 'Quests', title: 'Story variables', enumName: 'E_StoryVariable',
+    description: 'Flags and counters the story remembers, e.g. helped_guild or rep_city_watch. Conditions check them and “Set variable” nodes change them.',
+    extras: [{ key: 'type', label: 'Type', options: ['Boolean', 'Integer', 'Text'] }, { key: 'default', label: 'Starts as', placeholder: 'false / 0 / text' }] },
   { key: 'quest_type', group: 'Quests', title: 'Quest types', enumName: 'E_QuestType',
     description: 'The kind of quest, shown on every quest node.', extras: [] },
   { key: 'region', group: 'World', title: 'Regions', enumName: 'E_Region',

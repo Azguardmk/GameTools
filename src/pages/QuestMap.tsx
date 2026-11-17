@@ -60,8 +60,9 @@ export default function QuestMapPage() {
       guard.add(id);
       if (n.kind === 'quest') return [id];
       if (n.kind === 'external') return n.data.ref && byId.get(n.data.ref)?.kind === 'quest' ? [n.data.ref] : [];
-      if (n.kind === 'choice') return edges.filter((e) => e.target === id).flatMap((e) => questSources(e.source, guard));
-      return [];
+      // Dialogue, choices, conditions, set-variable and start nodes are steps between quests: look further back.
+      if (n.kind === 'note' || n.kind === 'end') return [];
+      return edges.filter((e) => e.target === id).flatMap((e) => questSources(e.source, guard));
     };
     for (const e of edges) {
       const t = byId.get(e.target);

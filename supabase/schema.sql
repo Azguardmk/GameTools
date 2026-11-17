@@ -76,7 +76,7 @@ create table if not exists quest_chains (
   sort int not null default 0
 );
 
--- kind: quest | condition | choice | external
+-- kind: start | end | quest | dialogue | condition | action | choice | external | note
 -- data for a quest: code, name, description, level, giver, type, zone, status, assignee,
 --   objectives [{type, text, count}], required_items [{item, qty}], rewards [{type, text, item, amount}]
 create table if not exists quest_nodes (
@@ -88,15 +88,17 @@ create table if not exists quest_nodes (
   data jsonb not null default '{}'::jsonb
 );
 
--- kind: unlocks | condition | choice | external
+-- kind: unlocks | condition | choice | external | response; source_handle is 'yes' / 'no' for condition outputs
 create table if not exists quest_edges (
   id uuid primary key default gen_random_uuid(),
   chain_id uuid references quest_chains(id) on delete cascade,
   source uuid references quest_nodes(id) on delete cascade,
   target uuid references quest_nodes(id) on delete cascade,
   kind text not null default 'unlocks',
-  label text not null default ''
+  label text not null default '',
+  source_handle text
 );
+alter table quest_edges add column if not exists source_handle text;
 
 create index if not exists tasks_group_idx on tasks(group_id);
 create index if not exists items_category_idx on items(category);

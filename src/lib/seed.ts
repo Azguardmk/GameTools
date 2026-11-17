@@ -94,6 +94,15 @@ export function buildSeed(): Record<Table, Row[]> {
     built: d('quest_status', 'Built in UE', '#d9a75e'),
     tested: d('quest_status', 'Tested', '#8fbf74'),
   };
+  const chr = {
+    odile: d('character', 'Engineer Odile', '#e3ad6a', { district: zone.tramyard, role: 'Tram engineer' }),
+    venn: d('character', 'Clockmaster Venn', '#d9a75e', { district: zone.clocktower, role: 'Clockmaker' }),
+    marot: d('character', 'Inspector Marot', '#6fb3d6', { district: zone.guildhall, role: 'City Watch inspector' }),
+  };
+  const sv = {
+    helpedGuild: d('variable', 'helped_guild', '#c294d6', { type: 'Boolean', default: 'false' }),
+    watchRep: d('variable', 'city_watch_rep', '#6fb3d6', { type: 'Integer', default: '0' }),
+  };
   const tp = {
     high: d('task_priority', 'High', '#e0805d'),
     medium: d('task_priority', 'Medium', '#d9a75e'),
@@ -192,39 +201,57 @@ export function buildSeed(): Record<Table, Row[]> {
   const nightShift = q(ch.watch, 0, 120, { code: 'Q_CW_001', name: 'Night Shift', level: '5–6', giver: 'Captain Ferrand', district: zone.tramyard, assignee: m.f2,
     objectives: [{ type: obj.reach, text: 'Patrol the tram line', count: 1 }], rewards: [{ type: rw.xp, text: '', item: null, amount: 150 }] });
 
-  const cond = n(ch.brass, 'condition', -230, 140, { text: 'Level ≥ 5' });
-  const smoke = q(ch.brass, 0, 100, { code: 'Q_NP_001', name: 'Smoke over the Tramyard', level: '5–7', giver: 'Engineer Odile', district: zone.tramyard,
+  const cond = n(ch.brass, 'condition', -230, 130, { text: 'Level ≥ 5', variable: null, op: '==', value: '' });
+  const smoke = q(ch.brass, 0, 100, { code: 'Q_NP_001', name: 'Smoke over the Tramyard', level: '5–7', giver: 'Engineer Odile', giver_id: chr.odile, district: zone.tramyard,
     status: qs.review, assignee: m.filip, description: 'Steam valves are bursting across the tram depot. Odile suspects sabotage.',
     objectives: [{ type: obj.interact, text: 'Inspect burst steam valves', count: 3 }, { type: obj.kill, text: 'Rust Rats', count: 8 }, { type: obj.deliver, text: 'Report back to Odile', count: 1 }],
     rewards: [{ type: rw.xp, text: '', item: null, amount: 250 }, { type: rw.currency, text: 'Cogs', item: it.cogs, amount: 40 }, { type: rw.item, text: '', item: it.belt, amount: 1 }] });
-  const gears = q(ch.brass, 300, 100, { code: 'Q_NP_002', name: 'Gears for the Clocktower', level: '6–8', giver: 'Clockmaster Venn', district: zone.clocktower,
+  const gears = q(ch.brass, 300, 100, { code: 'Q_NP_002', name: 'Gears for the Clocktower', level: '6–8', giver: 'Clockmaster Venn', giver_id: chr.venn, district: zone.clocktower,
     assignee: m.f1, description: 'The great clock has stopped. Venn needs parts no honest merchant will sell.',
     objectives: [{ type: obj.collect, text: 'Brass Gear', count: 5 }, { type: obj.interact, text: 'Repair the clock mechanism', count: 1 }],
     required_items: [{ item: it.gear, qty: 5 }],
     rewards: [{ type: rw.xp, text: '', item: null, amount: 400 }, { type: rw.blueprint, text: '', item: it.bpRegulator, amount: 1 }, { type: rw.item, text: '', item: it.wrench, amount: 1 }] });
   const choice = n(ch.brass, 'choice', 600, 130, { text: 'Protect or expose the Guild?' });
-  const favor = q(ch.brass, 860, 0, { code: 'Q_NP_003a', name: "The Guild's Favor", level: '8–10', giver: 'Clockmaster Venn', district: zone.guildhall,
+  const favor = q(ch.brass, 860, 0, { code: 'Q_NP_003a', name: "The Guild's Favor", level: '8–10', giver: 'Clockmaster Venn', giver_id: chr.venn, district: zone.guildhall,
     objectives: [{ type: obj.deliver, text: 'Sealed ledger to the Guildhall', count: 1 }] });
-  const whistle = q(ch.brass, 860, 220, { code: 'Q_NP_003b', name: 'Whistleblower', level: '8–10', giver: 'Inspector Marot', district: zone.guildhall, assignee: m.f2,
+  const whistle = q(ch.brass, 860, 220, { code: 'Q_NP_003b', name: 'Whistleblower', level: '8–10', giver: 'Inspector Marot', giver_id: chr.marot, district: zone.guildhall, assignee: m.f2,
     objectives: [{ type: obj.interact, text: 'Steal the ledger', count: 1 }, { type: obj.reach, text: 'Escape the Guildhall', count: 1 }],
     rewards: [{ type: rw.xp, text: '', item: null, amount: 600 }, { type: rw.rep, text: 'Clockmakers Guild', item: null, amount: -500 },
       { type: rw.rep, text: 'City Watch', item: null, amount: 750 }, { type: rw.title, text: 'The Whistleblower', item: null, amount: 1 }] });
   const extSworn = n(ch.brass, 'external', 600, 380, { ref: sworn.id });
 
-  const drains = q(ch.undercity, 280, 100, { code: 'Q_UC_001', name: 'Into the Drains', level: '9–10', giver: 'Inspector Marot', district: zone.undercity,
+  const drains = q(ch.undercity, 280, 100, { code: 'Q_UC_001', name: 'Into the Drains', level: '9–10', giver: 'Inspector Marot', giver_id: chr.marot, district: zone.undercity,
     objectives: [{ type: obj.reach, text: 'Enter the Undercity', count: 1 }], rewards: [{ type: rw.xp, text: '', item: null, amount: 500 }] });
   const extWhistle = n(ch.undercity, 'external', 0, 110, { ref: whistle.id });
   const ratKing = q(ch.undercity, 580, 100, { code: 'Q_UC_002', name: "Rat King's Toll", level: '10–11', giver: 'Rat King', district: zone.undercity,
     objectives: [{ type: obj.collect, text: 'Power Cell', count: 2 }], required_items: [{ item: it.cell, qty: 2 }], rewards: [{ type: rw.xp, text: '', item: null, amount: 650 }] });
 
-  const quest_nodes = [cond, smoke, gears, choice, favor, whistle, extSworn, nightShift, sworn, extWhistle, drains, ratKing];
-  const e = (chain_id: string, source: string, target: string, kind: string, label = '') => ({ id: newId(), chain_id, source, target, kind, label });
+  // A small branching flow around the choice, to show dialogue, variables and endings.
+  const start = n(ch.brass, 'start', -460, 150, { text: 'The player arrives at the Tramyard.' });
+  const vennTalk = n(ch.brass, 'dialogue', 560, 330, { speaker: chr.venn, text: 'The clock runs again, thanks to you. But you saw the Guild ledger, didn’t you? Keep it quiet and the Guild will remember you kindly.' });
+  const setProtect = n(ch.brass, 'action', 900, 20, { variable: sv.helpedGuild, op: 'set', value: 'true' });
+  const setExpose = n(ch.brass, 'action', 900, 300, { variable: sv.watchRep, op: 'add', value: '250' });
+  const endGuild = n(ch.brass, 'end', 1500, 0, { outcome: 'success', text: 'The Guild owes the player a favour.' });
+  const endWatch = n(ch.brass, 'end', 1500, 300, { outcome: 'success', text: 'The Guild’s sabotage is exposed.' });
+  const note = n(ch.brass, 'note', -460, -60, { text: 'Sample flow: press Play above to walk through it.' });
+  choice.x = 760; choice.y = 160;
+  favor.x = 1160; favor.y = 0;
+  whistle.x = 1160; whistle.y = 260;
+  extSworn.x = 900; extSworn.y = 470;
+  const quest_nodes = [start, note, cond, smoke, gears, vennTalk, choice, setProtect, setExpose, favor, whistle, endGuild, endWatch, extSworn, nightShift, sworn, extWhistle, drains, ratKing];
+  const e = (chain_id: string, source: string, target: string, kind: string, label = '', source_handle: string | null = null) => ({ id: newId(), chain_id, source, target, kind, label, source_handle });
   const quest_edges = [
-    e(ch.brass, cond.id, smoke.id, 'condition'),
+    e(ch.brass, start.id, cond.id, 'unlocks'),
+    e(ch.brass, cond.id, smoke.id, 'condition', '', 'yes'),
     e(ch.brass, smoke.id, gears.id, 'unlocks'),
-    e(ch.brass, gears.id, choice.id, 'unlocks'),
-    e(ch.brass, choice.id, favor.id, 'choice', 'Protect'),
-    e(ch.brass, choice.id, whistle.id, 'choice', 'Expose'),
+    e(ch.brass, gears.id, vennTalk.id, 'unlocks'),
+    e(ch.brass, vennTalk.id, choice.id, 'response', 'I saw it. What happens now?'),
+    e(ch.brass, choice.id, setProtect.id, 'choice', 'Protect the Guild'),
+    e(ch.brass, choice.id, setExpose.id, 'choice', 'Expose the Guild'),
+    e(ch.brass, setProtect.id, favor.id, 'unlocks'),
+    e(ch.brass, setExpose.id, whistle.id, 'unlocks'),
+    e(ch.brass, favor.id, endGuild.id, 'unlocks'),
+    e(ch.brass, whistle.id, endWatch.id, 'unlocks'),
     e(ch.brass, extSworn.id, whistle.id, 'external'),
     e(ch.watch, nightShift.id, sworn.id, 'unlocks'),
     e(ch.undercity, extWhistle.id, drains.id, 'external'),

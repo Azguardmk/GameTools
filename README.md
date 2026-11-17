@@ -3,10 +3,10 @@
 A shared web tool for the Earthlings team:
 
 - **Tasks**: a task board with theme groups, pinned columns, a checkbox to mark tasks done, assignee badges and filters.
-- **Quests**: a node editor for quest chains. It has quests, conditions, player choices, links to quests in other chains, objectives, required items, rewards and problem checks, and exports JSON for Unreal.
+- **Quests**: a node editor for quest chains, inspired by narrative tools like Arcweave and Drafft. Node types are Start, Quest, Dialogue (a character's line, with player replies as links), Choice, Condition (checks a story variable and leaves through Yes or No), Set variable, Quest from another chain, End (success, failure or abandoned) and Note. **Play mode** walks through a chain like a player, running conditions and variable changes as it goes. There are problem checks too, and it exports the full flow as JSON for Unreal.
 - **Quest map**: every quest by name, grouped by chain, with links between chains.
 - **Items**: an item database with categories, rarities, crafting recipes, blueprints, how to get each item and where it's used. It exports a CSV for an Unreal DataTable.
-- **Definitions**: the lists everything else picks from (team members, item categories, rarities, stations, quest types, regions, districts and so on). They export as JSON enums.
+- **Definitions**: the lists everything else picks from (team members, regions, districts, characters, story variables, item categories, rarities, quest types and so on). They export as JSON enums.
 
 It's built with React, Vite and React Flow, hosted on GitHub Pages, with data in Supabase.
 
@@ -49,7 +49,7 @@ Items, quests and tasks point at definitions by ID, so renaming a category or ra
 ## Exports for Unreal
 
 - **Items → Export DataTable (CSV)**: the first column is the row name (item ID). Category, rarity and station are written as enum keys (`QuestItem`, `Rare` and so on).
-- **Quests → Export to Unreal (JSON)**: every chain with its quests, objectives, required items, rewards and prerequisites (quest IDs, conditions and choices).
+- **Quests → Export to Unreal (JSON)**: the story variables, then every chain with its quests (objectives, required items, rewards, dialogue, prerequisites) and the full flow as `nodes` and `links`. A condition's link has an `output` of `Yes` or `No`, so a small runner in Unreal can play it.
 - **Definitions → Export all lists (JSON)**: each list as `E_<Name>` with keys, display names and colours.
 
 The column names are a starting point. Match them to your `FTableRowBase` structs and adjust `src/pages/Items.tsx` and `src/pages/Quests.tsx` if needed.

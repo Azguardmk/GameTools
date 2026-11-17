@@ -1,12 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Background,
   Controls,
-  Handle,
   MarkerType,
   MiniMap,
-  Position,
   ReactFlow,
   ReactFlowProvider,
   applyNodeChanges,
@@ -15,153 +13,32 @@ import {
   type Edge,
   type Node,
   type NodeChange,
-  type NodeProps,
 } from '@xyflow/react';
 import { insert, newId, remove, snapshot, update, useTable } from '../lib/db';
 import { download, useDefinitions, useMembers } from '../lib/hooks';
-import { enumKey, type EdgeKind, type Item, type NodeKind, type QuestChain, type QuestData, type QuestEdge, type QuestNode, type Task, type TaskGroup } from '../lib/types';
-import { DefSelect, Icon, MemberBadge, SwatchPicker, TextField } from '../components/ui';
-
-export const EDGE_COLORS: Record<EdgeKind, string> = {
-  unlocks: '#d9a75e',
-  condition: '#c294d6',
-  choice: '#e0805d',
-  external: '#c294d6',
-};
-
-type Ctx = {
-  defs: ReturnType<typeof useDefinitions>;
-  members: ReturnType<typeof useMembers>;
-  itemsById: Map<string, Item>;
-  allNodes: Map<string, QuestNode>;
-  chains: Map<string, QuestChain>;
-  problems: Map<string, string[]>;
-};
-const QuestCtx = createContext<Ctx>(null as unknown as Ctx);
-
-export function questLabel(n: QuestNode | undefined) {
-  if (!n) return 'Missing quest';
-  return n.data.name || n.data.code || 'Untitled quest';
-}
-
-// ---------- problem checks ----------
-function findProblems(nodes: QuestNode[], items: Item[]) {
-  const itemIds = new Set(items.map((i) => i.id));
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const out = new Map<string, string[]>();
-  const add = (id: string, msg: string) => out.set(id, [...(out.get(id) ?? []), msg]);
-  for (const n of nodes) {
-    if (n.kind === 'quest') {
-      const d = n.data as QuestData;
-      if (!d.name?.trim()) add(n.id, 'Quest has no name');
-      if (!d.rewards?.length) add(n.id, 'Quest has no reward');
-      if (!d.objectives?.length) add(n.id, 'Quest has no objectives');
-      d.required_items?.forEach((r) => !itemIds.has(r.item) && add(n.id, 'A required item was deleted'));
-      d.rewards?.forEach((r) => r.item && !itemIds.has(r.item) && add(n.id, 'A reward item was deleted'));
-    }
-    if (n.kind === 'external') {
-      const ref = byId.get(n.data.ref);
-      if (!ref) add(n.id, 'Linked quest no longer exists');
-    }
-  }
-  return out;
-}
-
-// ---------- custom nodes ----------
-function QuestNodeView({ data, selected }: NodeProps) {
-  const { defs, members, problems } = useContext(QuestCtx);
-  const n = data.node as QuestNode;
-  const d = n.data as QuestData;
-  const status = defs.get(d.status);
-  const type = defs.get(d.type);
-  const who = members.get(d.assignee);
-  const warn = problems.get(n.id);
-  return (
-    <div className={'qnode' + (selected ? ' selected' : '')}>
-      <Handle type="target" position={Position.Left} />
-      <div className="qhead">
-        <span>{d.code || 'NO ID'}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: type?.color ?? 'var(--muted)', fontWeight: 500 }}>
-          {type?.name}
-          {warn && (
-            <span style={{ color: 'var(--danger)', display: 'flex' }} title={warn.join('\n')}>
-              <Icon name="warn" size={13} />
-            </span>
-          )}
-        </span>
-      </div>
-      <div className="qbody">
-        <span className="qname">{d.name || 'Untitled quest'}</span>
-        <span className="qrow">
-          {d.level ? 'Lv ' + d.level + ' · ' : ''}
-          {d.objectives?.length ?? 0} objectives
-        </span>
-        {d.rewards?.length > 0 && (
-          <span className="qrow" style={{ gap: 4 }}>
-            {d.rewards.slice(0, 4).map((r, i) => {
-              const t = defs.get(r.type);
-              return (
-                <span key={i} className="tag" style={{ height: 18, fontSize: 9, color: t?.color, background: (t?.color ?? '#888') + '26' }}>
-                  {t?.name ?? 'Reward'}
-                </span>
-              );
-            })}
-            {d.rewards.length > 4 && <span>+{d.rewards.length - 4}</span>}
-          </span>
-        )}
-        <span className="qrow" style={{ color: 'var(--text-2)' }}>
-          <span style={{ width: 8, height: 8, borderRadius: 4, background: status?.color ?? '#5a544a' }} />
-          {status?.name ?? 'No status'}
-          <span style={{ flex: 1 }} />
-          {who ? <MemberBadge m={who} size={22} /> : <span className="unassigned" style={{ height: 22, fontSize: 10, padding: '0 6px' }}>?</span>}
-        </span>
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-
-function SimpleNode({ data, selected, kind }: NodeProps & { kind: 'condition' | 'choice' }) {
-  const n = data.node as QuestNode;
-  const c = kind === 'condition' ? { line: '#c294d6', bg: '#1d1820', label: 'CONDITION', lc: '#d4b0e3' } : { line: '#e0805d', bg: '#211714', label: 'PLAYER CHOICE', lc: '#f0a083' };
-  return (
-    <div className={'snode' + (selected ? ' selected' : '')} style={{ borderColor: c.line, background: c.bg }}>
-      <Handle type="target" position={Position.Left} />
-      <span className="klabel" style={{ color: c.lc }}>
-        {c.label}
-      </span>
-      <span className="ktext">{n.data.text || '…'}</span>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-
-function ExternalNode({ data, selected }: NodeProps) {
-  const { allNodes, chains, problems } = useContext(QuestCtx);
-  const n = data.node as QuestNode;
-  const ref = allNodes.get(n.data.ref);
-  const chain = ref ? chains.get(ref.chain_id) : undefined;
-  return (
-    <div className={'snode' + (selected ? ' selected' : '')} style={{ borderColor: '#c294d6', borderStyle: 'dashed', background: '#1d1820' }}>
-      <Handle type="target" position={Position.Left} />
-      <span className="klabel" style={{ color: '#d4b0e3', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="link" size={12} /> NEEDS QUEST · OTHER CHAIN
-      </span>
-      <span className="ktext">{questLabel(ref)}</span>
-      <span style={{ fontSize: 11, color: problems.get(n.id) ? 'var(--danger)' : '#b9afc0' }}>
-        {ref ? `${ref.data.code || ''}${ref.data.code ? ' · ' : ''}${chain?.name ?? ''}` : 'Pick a quest in the panel'}
-      </span>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-
-const nodeTypes = {
-  quest: QuestNodeView,
-  condition: (p: NodeProps) => <SimpleNode {...p} kind="condition" />,
-  choice: (p: NodeProps) => <SimpleNode {...p} kind="choice" />,
-  external: ExternalNode,
-};
+import { enumKey, type Item, type NodeKind, type QuestChain, type QuestData, type QuestEdge, type QuestNode, type Task, type TaskGroup } from '../lib/types';
+import {
+  ACTION_OPS,
+  EDGE_COLORS,
+  NODE_META,
+  NO,
+  OPS,
+  OUTCOMES,
+  QuestCtx,
+  YES,
+  actionText,
+  conditionText,
+  edgeColor,
+  edgeKindFor,
+  edgeLabel,
+  findProblems,
+  nodeTypes,
+  questLabel,
+  varType,
+  type Ctx,
+} from './quest/shared';
+import PlayMode from './quest/Play';
+import { DefSelect, Icon, SwatchPicker, TextField } from '../components/ui';
 
 // ---------- page ----------
 export default function QuestsPage() {
@@ -196,7 +73,7 @@ function QuestsInner() {
 
   const chainNodes = useMemo(() => allNodesRaw.filter((n) => n.chain_id === chainId), [allNodesRaw, chainId]);
   const chainEdges = useMemo(() => allEdges.filter((e) => e.chain_id === chainId), [allEdges, chainId]);
-  const problems = useMemo(() => findProblems(allNodesRaw, items), [allNodesRaw, items]);
+  const problems = useMemo(() => findProblems(allNodesRaw, allEdges, items, defs), [allNodesRaw, allEdges, items, defs]);
   const ctx: Ctx = useMemo(
     () => ({
       defs,
@@ -220,12 +97,14 @@ function QuestsInner() {
       chainEdges.map((e) => ({
         id: e.id,
         source: e.source,
+        sourceHandle: e.source_handle ?? undefined,
         target: e.target,
-        label: e.label || undefined,
+        label: edgeLabel(e),
         labelBgPadding: [6, 3] as [number, number],
         labelBgBorderRadius: 5,
-        style: { stroke: EDGE_COLORS[e.kind], strokeWidth: 2.5, strokeDasharray: e.kind === 'external' ? '6 6' : undefined },
-        markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLORS[e.kind], width: 16, height: 16 },
+        labelStyle: { fill: edgeColor(e) },
+        style: { stroke: edgeColor(e), strokeWidth: 2.5, strokeDasharray: e.kind === 'external' ? '6 6' : undefined },
+        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor(e), width: 16, height: 16 },
       })),
     [chainEdges],
   );
@@ -238,11 +117,22 @@ function QuestsInner() {
 
   const onConnect = (c: Connection) => {
     if (!chainId || !c.source || !c.target || c.source === c.target) return;
-    if (chainEdges.some((e) => e.source === c.source && e.target === c.target)) return;
+    const handle = c.sourceHandle ?? null;
+    if (chainEdges.some((e) => e.source === c.source && e.target === c.target && (e.source_handle ?? null) === handle)) return;
     const src = chainNodes.find((n) => n.id === c.source);
-    const kind: EdgeKind = src?.kind === 'condition' ? 'condition' : src?.kind === 'choice' ? 'choice' : src?.kind === 'external' ? 'external' : 'unlocks';
-    const label = kind === 'choice' ? prompt('What does the player choose on this path? (e.g. Protect)') ?? '' : '';
-    insert('quest_edges', { id: newId(), chain_id: chainId, source: c.source, target: c.target, kind, label });
+    const kind = edgeKindFor(src);
+    let label = '';
+    if (kind === 'choice') {
+      const l = prompt('What does the player choose on this path? (e.g. Protect the Guild)');
+      if (l === null) return;
+      label = l;
+    }
+    if (kind === 'response') {
+      const l = prompt('The player’s reply on this path (leave empty for a plain “Continue”)');
+      if (l === null) return;
+      label = l;
+    }
+    insert('quest_edges', { id: newId(), chain_id: chainId, source: c.source, target: c.target, kind, label, source_handle: kind === 'condition' ? handle ?? 'yes' : null });
   };
 
   const deleteNodes = async (ids: string[]) => {
@@ -309,7 +199,7 @@ function QuestsInner() {
             if (!s) return null;
             if (s.kind === 'quest') return { type: 'QuestComplete', quest: s.data.code };
             if (s.kind === 'external') return { type: 'QuestComplete', quest: ctx.allNodes.get(s.data.ref)?.data.code ?? '' };
-            if (s.kind === 'condition') return { type: 'Condition', text: s.data.text };
+            if (s.kind === 'condition') return { type: 'Condition', condition: conditionText(s, defs), output: e.source_handle === 'no' ? 'No' : 'Yes' };
             if (s.kind === 'choice') {
               const before = es.filter((x) => x.target === s.id).map((x) => ctx.allNodes.get(x.source)?.data.code);
               return { type: 'Choice', choice: s.data.text, option: e.label, after: before };
@@ -324,7 +214,7 @@ function QuestsInner() {
           .map((n) => {
             const d = n.data as QuestData;
             return {
-              id: d.code, name: d.name, description: d.description, level: d.level, giver: d.giver,
+              id: d.code, name: d.name, description: d.description, level: d.level, giver: name(d.giver_id) || d.giver,
               type: name(d.type), region: name(d.region ?? defs.get(d.district)?.extra.region), district: name(d.district), devStatus: name(d.status),
               objectives: d.objectives.map((o) => ({ type: name(o.type), text: o.text, count: o.count })),
               requiredItems: d.required_items.map((r) => ({ item: code(r.item), qty: r.qty })),
@@ -333,9 +223,39 @@ function QuestsInner() {
               prerequisites: prereqs(n.id),
             };
           }),
+        // The full flow, node by node, for a dialogue / quest-flow runner in Unreal.
+        nodes: ns
+          .filter((n) => n.kind !== 'note')
+          .map((n) => {
+            const base = { id: n.id, type: n.kind };
+            switch (n.kind) {
+              case 'quest':
+                return { ...base, quest: n.data.code };
+              case 'dialogue':
+                return { ...base, speaker: name(n.data.speaker), text: n.data.text ?? '' };
+              case 'condition':
+                return { ...base, variable: name(n.data.variable), op: n.data.op ?? '==', value: n.data.value ?? '', text: n.data.variable ? '' : n.data.text ?? '' };
+              case 'action':
+                return { ...base, variable: name(n.data.variable), op: n.data.op ?? 'set', value: n.data.value ?? '' };
+              case 'external':
+                return { ...base, quest: ctx.allNodes.get(n.data.ref)?.data.code ?? '' };
+              case 'end':
+                return { ...base, outcome: n.data.outcome ?? 'success', text: n.data.text ?? '' };
+              default:
+                return { ...base, text: n.data.text ?? '' };
+            }
+          }),
+        links: es.map((e) => ({
+          from: e.source,
+          to: e.target,
+          type: e.kind,
+          label: e.label,
+          output: e.kind === 'condition' ? (e.source_handle === 'no' ? 'No' : 'Yes') : undefined,
+        })),
       };
     });
-    download('earthlings-quests.json', JSON.stringify(out, null, 2), 'application/json');
+    const variables = defs.list('variable').map((v) => ({ key: enumKey(v.name), name: v.name, type: varType(v), default: v.extra?.default ?? '' }));
+    download('earthlings-quests.json', JSON.stringify({ variables, chains: out }, null, 2), 'application/json');
   };
 
   const newChain = () => {
@@ -350,6 +270,14 @@ function QuestsInner() {
   const chain = chains.find((c) => c.id === chainId);
   const problemCount = problems.size;
   const [showProblems, setShowProblems] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const playStart = (() => {
+    const start = chainNodes.find((n) => n.kind === 'start');
+    if (start) return start.id;
+    if (selected && selected.kind !== 'note') return selected.id;
+    const targets = new Set(chainEdges.map((e) => e.target));
+    return chainNodes.find((n) => n.kind !== 'note' && !targets.has(n.id))?.id ?? null;
+  })();
 
   return (
     <QuestCtx.Provider value={ctx}>
@@ -378,18 +306,24 @@ function QuestsInner() {
             <span className="muted" style={{ fontSize: 13, marginRight: 4 }}>
               Add
             </span>
-            <button type="button" className="btn small" onClick={addQuest}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: '#d9a75e' }} /> Quest
-            </button>
-            <button type="button" className="btn small" onClick={() => addNode('condition', { text: '' })}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: '#c294d6' }} /> Condition
-            </button>
-            <button type="button" className="btn small" onClick={() => addNode('external', { ref: null })}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, border: '1.5px dashed #c294d6' }} /> Quest from another chain
-            </button>
-            <button type="button" className="btn small" onClick={() => addNode('choice', { text: '' })}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: '#e0805d' }} /> Choice
-            </button>
+            {(
+              [
+                ['start', () => addNode('start', { text: '' })],
+                ['quest', addQuest],
+                ['dialogue', () => addNode('dialogue', { speaker: null, text: '' })],
+                ['choice', () => addNode('choice', { text: '' })],
+                ['condition', () => addNode('condition', { variable: null, op: '==', value: 'true', text: '' })],
+                ['action', () => addNode('action', { variable: null, op: 'set', value: 'true' })],
+                ['external', () => addNode('external', { ref: null })],
+                ['end', () => addNode('end', { outcome: 'success', text: '' })],
+                ['note', () => addNode('note', { text: '' })],
+              ] as [NodeKind, () => void][]
+            ).map(([k, fn]) => (
+              <button key={k} type="button" className="btn small" onClick={fn} title={NODE_META[k].hint}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: k === 'external' ? 'transparent' : NODE_META[k].color, border: k === 'external' ? '1.5px dashed #c294d6' : undefined }} />
+                {NODE_META[k].label}
+              </button>
+            ))}
             <div className="spacer" />
             <button type="button" className="btn small" onClick={autoLayout}>
               Auto-layout
@@ -399,6 +333,9 @@ function QuestsInner() {
                 <Icon name="warn" size={14} /> {problemCount} problem{problemCount === 1 ? '' : 's'}
               </button>
             )}
+            <button type="button" className="btn small play-btn" onClick={() => setPlaying(true)}>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z" /></svg> Play
+            </button>
             <button type="button" className="btn small primary" onClick={exportJson}>
               <Icon name="download" size={14} /> Export to Unreal (JSON)
             </button>
@@ -418,8 +355,8 @@ function QuestsInner() {
                   onEdgesDelete={(es) => remove('quest_edges', es.map((e) => e.id))}
                   onEdgeDoubleClick={(_e, edge) => {
                     const e = chainEdges.find((x) => x.id === edge.id);
-                    if (e?.kind !== 'choice') return;
-                    const label = prompt('Choice label', e.label);
+                    if (e?.kind !== 'choice' && e?.kind !== 'response') return;
+                    const label = prompt(e.kind === 'choice' ? 'Option text' : 'Player’s reply (empty = Continue)', e.label);
                     if (label !== null) update('quest_edges', e.id, { label });
                   }}
                   onPaneClick={() => setSel(null)}
@@ -433,15 +370,17 @@ function QuestsInner() {
                 >
                   <Background color="#2a2723" gap={22} />
                   <Controls showInteractive={false} />
-                  <MiniMap pannable zoomable nodeColor={(n) => (n.type === 'quest' ? '#d9a75e' : n.type === 'choice' ? '#e0805d' : '#c294d6')} maskColor="rgba(15,14,13,0.7)" />
+                  <MiniMap pannable zoomable nodeColor={(n) => NODE_META[(n.type ?? 'quest') as NodeKind]?.color ?? '#c294d6'} maskColor="rgba(15,14,13,0.7)" />
                 </ReactFlow>
               </div>
               <div className="legend">
                 <span><i style={{ borderColor: EDGE_COLORS.unlocks }} />Unlocks</span>
-                <span><i style={{ borderColor: EDGE_COLORS.condition }} />Condition</span>
+                <span><i style={{ borderColor: EDGE_COLORS.response }} />Dialogue reply</span>
+                <span><i style={{ borderColor: YES }} />Yes</span>
+                <span><i style={{ borderColor: NO }} />No</span>
                 <span><i style={{ borderColor: EDGE_COLORS.external, borderTopStyle: 'dashed' }} />Quest from another chain</span>
                 <span><i style={{ borderColor: EDGE_COLORS.choice }} />Choice</span>
-                <span className="muted">Drag from a node’s right dot to another node to link them · Select and press Delete to remove · Double-click a choice line to rename it</span>
+                <span className="muted">Drag from a node’s right dot to another node to link them · Select and press Delete to remove · Double-click a choice or reply line to edit its text · Press Play to test the chain</span>
               </div>
             </div>
 
@@ -451,13 +390,28 @@ function QuestsInner() {
               ) : selected?.kind === 'quest' ? (
                 <QuestPanel key={selected.id} node={selected} edges={chainEdges} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
               ) : selected ? (
-                <OtherPanel key={selected.id} node={selected} chainId={chainId!} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
+                <OtherPanel key={selected.id} node={selected} chainId={chainId!} edges={chainEdges} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
               ) : (
                 <ChainPanel key={chain.id} chain={chain} onDeleted={() => setParams({})} />
               )}
             </aside>
           </div>
         </>
+      )}
+      {playing && chain && (
+        <PlayMode
+          chainName={chain.name}
+          startId={playStart}
+          nodes={chainNodes}
+          edges={chainEdges}
+          allNodes={ctx.allNodes}
+          defs={defs}
+          itemsById={ctx.itemsById}
+          onClose={(last) => {
+            setPlaying(false);
+            if (last) setSel(last);
+          }}
+        />
       )}
     </QuestCtx.Provider>
   );
@@ -474,7 +428,7 @@ function ChainPanel({ chain, onDeleted }: { chain: QuestChain; onDeleted: () => 
         <SwatchPicker value={chain.color} onChange={(c) => update('quest_chains', chain.id, { color: c })} label="Chain colour" />
       </div>
       <p className="muted" style={{ margin: 0, lineHeight: 1.5, fontSize: 13 }}>
-        Click a node to edit it. Use the Add buttons above to create quests, conditions, choices and links to quests in other chains.
+        Click a node to edit it. Use the Add buttons above to build the flow: Start, quests, dialogue lines, player choices, conditions on story variables, Set variable, links to other chains and End. Press Play to test it like a player.
       </p>
       <button
         type="button"
@@ -520,7 +474,7 @@ function ProblemList({ problems, onOpen }: { problems: Map<string, string[]>; on
   );
 }
 
-function OtherPanel({ node, chainId, onDelete, onOpen }: { node: QuestNode; chainId: string; onDelete: () => void; onOpen: (chain: string, node?: string) => void }) {
+function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNode; chainId: string; edges: QuestEdge[]; onDelete: () => void; onOpen: (chain: string, node?: string) => void }) {
   const { allNodes, chains } = useContext(QuestCtx);
   const set = (data: Record<string, unknown>) => update('quest_nodes', node.id, { data: { ...node.data, ...data } });
   if (node.kind === 'external') {
@@ -556,24 +510,214 @@ function OtherPanel({ node, chainId, onDelete, onOpen }: { node: QuestNode; chai
       </>
     );
   }
+  const { defs } = useContext(QuestCtx);
+  const del = (
+    <button type="button" className="btn warn" style={{ alignSelf: 'flex-start' }} onClick={onDelete}>
+      <Icon name="trash" /> Delete node
+    </button>
+  );
+  const help = (t: string) => (
+    <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+      {t}
+    </p>
+  );
+  const variables = defs.list('variable');
+  const varPicker = (
+    <label className="field">
+      <span className="field-label">Story variable</span>
+      <DefSelect options={variables} value={node.data.variable} onChange={(v) => set({ variable: v })} label="Story variable" allowEmpty />
+    </label>
+  );
+  const valueField = (placeholder: string) => {
+    const t = varType(defs.get(node.data.variable));
+    return t === 'Boolean' ? (
+      <span className="select-wrap">
+        <select aria-label="Value" value={String(node.data.value ?? 'true')} onChange={(e) => set({ value: e.target.value })} style={{ paddingLeft: 10 }}>
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+      </span>
+    ) : (
+      <TextField value={String(node.data.value ?? '')} label="Value" placeholder={placeholder} type={t === 'Integer' ? 'number' : 'text'} onCommit={(v) => set({ value: v })} />
+    );
+  };
+  const outs = edges.filter((e) => e.source === node.id);
+
+  if (node.kind === 'start') {
+    return (
+      <>
+        <span className="section-label" style={{ color: NODE_META.start.color }}>START</span>
+        {help('Where this chain begins. Play mode starts here. Connect it to the first dialogue or quest.')}
+        <label className="field">
+          <span className="field-label">How the chain begins (optional)</span>
+          <TextField multiline value={node.data.text ?? ''} label="Start text" placeholder="e.g. The player arrives at the Tramyard for the first time" onCommit={(v) => set({ text: v })} />
+        </label>
+        {del}
+      </>
+    );
+  }
+
+  if (node.kind === 'end') {
+    return (
+      <>
+        <span className="section-label" style={{ color: NODE_META.end.color }}>END</span>
+        {help('Where this path of the chain ends. A chain can have several Ends, e.g. one per outcome.')}
+        <div className="field">
+          <span className="field-label">Outcome</span>
+          <div role="radiogroup" aria-label="Outcome" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {OUTCOMES.map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                role="radio"
+                aria-checked={(node.data.outcome ?? 'success') === o.key}
+                className="chip"
+                aria-pressed={(node.data.outcome ?? 'success') === o.key}
+                style={{ borderColor: (node.data.outcome ?? 'success') === o.key ? o.color : undefined }}
+                onClick={() => set({ outcome: o.key })}
+              >
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: o.color }} /> {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="field">
+          <span className="field-label">Ending text (optional)</span>
+          <TextField multiline value={node.data.text ?? ''} label="Ending text" placeholder="What happens at this ending" onCommit={(v) => set({ text: v })} />
+        </label>
+        {del}
+      </>
+    );
+  }
+
+  if (node.kind === 'dialogue') {
+    return (
+      <>
+        <span className="section-label" style={{ color: NODE_META.dialogue.color }}>DIALOGUE</span>
+        <label className="field">
+          <span className="field-label">Speaker</span>
+          <DefSelect options={defs.list('character')} value={node.data.speaker} onChange={(v) => set({ speaker: v })} label="Speaker" allowEmpty />
+        </label>
+        {defs.list('character').length === 0 && help('Add characters under Definitions → Characters.')}
+        <label className="field">
+          <span className="field-label">What they say</span>
+          <TextField multiline rows={6} value={node.data.text ?? ''} label="Dialogue line" placeholder="Write the line…" onCommit={(v) => set({ text: v })} />
+        </label>
+        <div className="card-box">
+          <span className="section-label">PLAYER REPLIES</span>
+          {outs.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Drag from the dot on the right to the next node. Each link is one reply.</span>}
+          {outs.map((e, i) => (
+            <div key={e.id} className="list-row">
+              <span className="muted" style={{ width: 18 }}>{i + 1}.</span>
+              <span className="grow">
+                <TextField value={e.label} label={'Reply ' + (i + 1)} placeholder="Continue" onCommit={(v) => update('quest_edges', e.id, { label: v })} />
+              </span>
+            </div>
+          ))}
+        </div>
+        {del}
+      </>
+    );
+  }
+
+  if (node.kind === 'condition') {
+    return (
+      <>
+        <span className="section-label" style={{ color: NODE_META.condition.color }}>CONDITION</span>
+        {help('Checks a story variable. The flow leaves through the green “Yes” dot or the red “No” dot.')}
+        {varPicker}
+        {node.data.variable ? (
+          <div className="grid2">
+            <label className="field">
+              <span className="field-label">Is</span>
+              <span className="select-wrap">
+                <select aria-label="Comparison" value={node.data.op ?? '=='} onChange={(e) => set({ op: e.target.value })} style={{ paddingLeft: 10 }}>
+                  {OPS.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
+                </select>
+              </span>
+            </label>
+            <label className="field">
+              <span className="field-label">Value</span>
+              {valueField('e.g. 5')}
+            </label>
+          </div>
+        ) : (
+          <label className="field">
+            <span className="field-label">Or describe the rule in words</span>
+            <TextField multiline value={node.data.text ?? ''} label="Condition text" placeholder="e.g. Level ≥ 5, Reputation ≥ Friendly" onCommit={(v) => set({ text: v })} />
+          </label>
+        )}
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: '#d4b0e3' }}>IF {conditionText(node, defs)}</span>
+        {variables.length === 0 && help('Add story variables under Definitions → Story variables to make conditions that Play mode can check.')}
+        {del}
+      </>
+    );
+  }
+
+  if (node.kind === 'action') {
+    return (
+      <>
+        <span className="section-label" style={{ color: NODE_META.action.color }}>SET VARIABLE</span>
+        {help('Changes a story variable when the flow passes through, e.g. remember that the player helped the Guild.')}
+        {varPicker}
+        <div className="grid2">
+          <label className="field">
+            <span className="field-label">Change</span>
+            <span className="select-wrap">
+              <select aria-label="Change" value={node.data.op ?? 'set'} onChange={(e) => set({ op: e.target.value })} style={{ paddingLeft: 10 }}>
+                {ACTION_OPS.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </label>
+          {node.data.op !== 'toggle' && (
+            <label className="field">
+              <span className="field-label">Value</span>
+              {valueField('e.g. 1')}
+            </label>
+          )}
+        </div>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: '#7fd3c4' }}>{actionText(node, defs)}</span>
+        {variables.length === 0 && help('Add story variables under Definitions → Story variables first.')}
+        {del}
+      </>
+    );
+  }
+
+  if (node.kind === 'note') {
+    return (
+      <>
+        <span className="section-label" style={{ color: NODE_META.note.color }}>NOTE</span>
+        {help('A sticky note for the team. It is not part of the flow and is not exported.')}
+        <TextField multiline rows={6} value={node.data.text ?? ''} label="Note" placeholder="Write a note…" onCommit={(v) => set({ text: v })} />
+        {del}
+      </>
+    );
+  }
+
+  // choice
   return (
     <>
-      <span className="section-label">{node.kind === 'condition' ? 'CONDITION' : 'PLAYER CHOICE'}</span>
-      <TextField
-        multiline
-        value={node.data.text ?? ''}
-        label="Text"
-        placeholder={node.kind === 'condition' ? 'e.g. Level ≥ 5, Reputation ≥ Friendly' : 'e.g. Protect or expose the Guild?'}
-        onCommit={(v) => set({ text: v })}
-      />
-      {node.kind === 'choice' && (
-        <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-          Connect the choice to one quest per option. You'll be asked for the option's label, and you can double-click a line to rename it.
-        </p>
-      )}
-      <button type="button" className="btn warn" style={{ alignSelf: 'flex-start' }} onClick={onDelete}>
-        <Icon name="trash" /> Delete node
-      </button>
+      <span className="section-label" style={{ color: NODE_META.choice.color }}>PLAYER CHOICE</span>
+      <TextField multiline value={node.data.text ?? ''} label="Question" placeholder="e.g. Protect or expose the Guild?" onCommit={(v) => set({ text: v })} />
+      <div className="card-box">
+        <span className="section-label">OPTIONS</span>
+        {outs.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Drag from the dot on the right to a node. Each link is one option.</span>}
+        {outs.map((e, i) => (
+          <div key={e.id} className="list-row">
+            <span className="muted" style={{ width: 18 }}>{i + 1}.</span>
+            <span className="grow">
+              <TextField value={e.label} label={'Option ' + (i + 1)} placeholder="Option text" onCommit={(v) => update('quest_edges', e.id, { label: v })} />
+            </span>
+          </div>
+        ))}
+      </div>
+      {del}
     </>
   );
 }
@@ -591,7 +735,12 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
     if (n.kind === 'quest') return questLabel(n);
     if (n.kind === 'condition') return n.data.text || 'Condition';
     if (n.kind === 'choice') return `${n.data.text || 'Choice'}${e?.label ? ' → ' + e.label : ''}`;
-    return questLabel(allNodes.get(n.data.ref)) + ' (other chain)';
+    if (n.kind === 'external') return questLabel(allNodes.get(n.data.ref)) + ' (other chain)';
+    if (n.kind === 'start') return 'Start of the chain';
+    if (n.kind === 'end') return 'End';
+    if (n.kind === 'dialogue') return `${defs.get(n.data.speaker)?.name ?? 'Dialogue'}${e?.label ? ': “' + e.label + '”' : ''}`;
+    if (n.kind === 'action') return 'Set ' + (defs.get(n.data.variable)?.name ?? 'variable');
+    return NODE_META[n.kind]?.label ?? n.kind;
   };
   const needs = edges.filter((e) => e.target === node.id);
   const unlocks = edges.filter((e) => e.source === node.id);
@@ -623,7 +772,8 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
       <div className="grid2">
         <label className="field">
           <span className="field-label">Quest giver</span>
-          <TextField value={d.giver} label="Quest giver" onCommit={(v) => set({ giver: v })} />
+          <DefSelect options={defs.list('character')} value={d.giver_id ?? null} onChange={(v) => set({ giver_id: v })} label="Quest giver" allowEmpty />
+          {!d.giver_id && d.giver && <span className="muted" style={{ fontSize: 11 }}>Was typed as “{d.giver}”</span>}
         </label>
         <label className="field">
           <span className="field-label">Level</span>

@@ -76,6 +76,8 @@ function useUsage() {
       add(it.recipe?.station);
     }
     for (const n of nodes) {
+      if (n.kind === 'dialogue') add(n.data.speaker);
+      if (n.kind === 'condition' || n.kind === 'action') add(n.data.variable);
       if (n.kind !== 'quest') continue;
       const d = n.data;
       add(d.type);
@@ -83,10 +85,14 @@ function useUsage() {
       add(d.district);
       add(d.status);
       add(d.assignee);
+      add(d.giver_id);
       d.objectives?.forEach((o: { type: string }) => add(o.type));
       d.rewards?.forEach((r: { type: string }) => add(r.type));
     }
-    for (const d of defRows) if (d.list === 'district') add(d.extra?.region);
+    for (const d of defRows) {
+      if (d.list === 'district') add(d.extra?.region);
+      if (d.list === 'character') add(d.extra?.district);
+    }
     for (const t of tasks) {
       add(t.priority);
       add(t.status);
@@ -108,7 +114,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
     if (!n) return;
     if (rows.some((r) => r.name.toLowerCase() === n.toLowerCase())) return alert(`"${n}" is already in this list.`);
     const extra: Record<string, string> = {};
-    meta.extras.forEach((x) => (extra[x.key] = ''));
+    meta.extras.forEach((x) => (extra[x.key] = x.options ? x.options[0] : ''));
     insert('definitions', { id: newId(), list: listKey, name: n, color, sort: rows.length ? Math.max(...rows.map((r) => r.sort)) + 1 : 0, extra });
     setName('');
   };
@@ -121,7 +127,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
     update('definitions', b.id, { sort: a.sort === b.sort ? a.sort + dir : a.sort });
   };
 
-  const cols = `74px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : '120px')).join(' ')} 110px 48px`;
+  const cols = `74px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : x.options ? '130px' : '120px')).join(' ')} 110px 48px`;
 
   return (
     <>
@@ -180,7 +186,20 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
               </span>
               {meta.extras.map((x) => (
                 <span key={x.key} className="cell">
-                  {x.ref ? (
+                  {x.options ? (
+                    <span className="select-wrap bare">
+                      <select
+                        aria-label={x.label + ' of ' + r.name}
+                        value={r.extra?.[x.key] || x.options[0]}
+                        style={{ paddingLeft: 10 }}
+                        onChange={(e) => update('definitions', r.id, { extra: { ...r.extra, [x.key]: e.target.value } })}
+                      >
+                        {x.options.map((o) => (
+                          <option key={o}>{o}</option>
+                        ))}
+                      </select>
+                    </span>
+                  ) : x.ref ? (
                     <DefSelect
                       className="bare"
                       options={defs.list(x.ref)}
