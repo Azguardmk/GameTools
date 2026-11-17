@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { insert, newId, remove, snapshot, update, useTable } from '../lib/db';
 import { useDefinitions, useMembers } from '../lib/hooks';
 import type { Definition, Task, TaskGroup } from '../lib/types';
@@ -217,17 +218,45 @@ function TaskRow({ t, groupColor, priorities, statuses, members }: { t: Task; gr
 
 function AssigneePicker({ t, members }: { t: Task; members: Members }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+
+  // The menu is drawn on top of the whole page (outside the table) so nothing shows through it.
+  const place = () => {
+    const r = btn.current?.getBoundingClientRect();
+    if (!r) return;
+    const height = Math.min(members.list.length * 40 + 12, 320);
+    const below = r.bottom + 4 + height <= window.innerHeight;
+    setPos({ top: below ? r.bottom + 4 : Math.max(8, r.top - 4 - height), left: Math.min(r.left, window.innerWidth - 240) });
+  };
+
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    place();
+    const onDown = (e: MouseEvent) => {
+      const n = e.target as Node;
+      if (!menu.current?.contains(n) && !btn.current?.contains(n)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onMove = () => setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
   const people = t.assignees.map((id) => members.get(id)).filter(Boolean) as ReturnType<typeof members.get>[];
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" className="assignees" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <>
+      <button ref={btn} type="button" className="assignees" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(!open)}>
         {people.length === 0 ? (
           <span className="unassigned">Unassigned</span>
         ) : (
@@ -237,27 +266,30 @@ function AssigneePicker({ t, members }: { t: Task; members: Members }) {
           </>
         )}
       </button>
-      {open && (
-        <div className="popover" onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
-          {members.list.map((m) => (
-            <label key={m.id}>
-              <input
-                type="checkbox"
-                checked={t.assignees.includes(m.id)}
-                onChange={(e) =>
-                  update('tasks', t.id, {
-                    assignees: e.target.checked ? [...t.assignees, m.id] : t.assignees.filter((x) => x !== m.id),
-                  })
-                }
-              />
-              <MemberBadge m={m} size={24} />
-              {m.name}
-            </label>
-          ))}
-          {members.list.length === 0 && <span className="empty">Add team members on the Definitions page.</span>}
-        </div>
-      )}
-    </div>
+      {open &&
+        pos &&
+        createPortal(
+          <div ref={menu} className="popover" role="group" aria-label="Assign people" style={{ position: 'fixed', top: pos.top, left: pos.left }}>
+            {members.list.map((m) => (
+              <label key={m.id}>
+                <input
+                  type="checkbox"
+                  checked={t.assignees.includes(m.id)}
+                  onChange={(e) =>
+                    update('tasks', t.id, {
+                      assignees: e.target.checked ? [...t.assignees, m.id] : t.assignees.filter((x) => x !== m.id),
+                    })
+                  }
+                />
+                <MemberBadge m={m} size={24} />
+                {m.name}
+              </label>
+            ))}
+            {members.list.length === 0 && <span className="empty">Add team members on the Definitions page.</span>}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
