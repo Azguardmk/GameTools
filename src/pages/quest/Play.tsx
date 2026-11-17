@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Definition, Item, QuestData, QuestEdge, QuestNode } from '../../lib/types';
 import { Icon } from '../../components/ui';
-import { ACTION_OPS, OUTCOMES, choiceOptions, conditionText, evaluate, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
+import { ACTION_OPS, OUTCOMES, choiceOptions, conditionChecks, conditionIsAutomatic, conditionText, evaluateCondition, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
 
 /*
  * Play mode: walk through a quest chain like a player would.
@@ -63,10 +63,10 @@ export default function PlayMode(props: {
         if (!at) entries = [...entries, { text: 'Stopped: nothing after this “Set variable”.', tone: 'no' }];
         continue;
       }
-      if (n.kind === 'condition' && n.data.variable && defs.get(n.data.variable)) {
-        const d = defs.get(n.data.variable)!;
-        const ok = evaluate(n.data.op || '==', v[d.id], parseValue(varType(d), n.data.value));
-        entries = [...entries, { text: `If ${conditionText(n, defs)} → ${ok ? 'Yes' : 'No'} (${d.name} is ${formatValue(v[d.id])})`, tone: ok ? 'yes' : 'no' }];
+      if (n.kind === 'condition' && n.data.variable && conditionIsAutomatic(n, defs)) {
+        const ok = evaluateCondition(n, defs, v);
+        const now = [...new Set(conditionChecks(n).map((c) => c.variable!))].map((id) => `${defs.get(id)!.name} is ${formatValue(v[id])}`).join(', ');
+        entries = [...entries, { text: `If ${conditionText(n, defs)} → ${ok ? 'Yes' : 'No'} (${now})`, tone: ok ? 'yes' : 'no' }];
         const e = outs(n.id).find((x) => (ok ? x.source_handle !== 'no' : x.source_handle === 'no'));
         at = e?.target ?? null;
         if (!at) entries = [...entries, { text: `Stopped: nothing connected to “${ok ? 'Yes' : 'No'}”.`, tone: 'no' }];

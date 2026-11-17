@@ -110,10 +110,43 @@ export function evaluate(op: string, left: VarValue, right: VarValue): boolean {
   }
 }
 
+/** One check inside a condition node: variable, comparison, value. */
+export type Check = { id: string; variable: string | null; op: string; value: string };
+
+/** All checks of a condition: the first lives on the node itself, extra ones in data.more. */
+export function conditionChecks(n: QuestNode): Check[] {
+  const first: Check = { id: 'first', variable: n.data.variable ?? null, op: n.data.op || '==', value: String(n.data.value ?? '') };
+  const more: Check[] = Array.isArray(n.data.more) ? n.data.more : [];
+  return [first, ...more];
+}
+
+/** 'or' when any check is enough, 'and' when all must be true. */
+export function conditionJoin(n: QuestNode): 'or' | 'and' {
+  return n.data.join === 'and' ? 'and' : 'or';
+}
+
+export function checkText(c: Check, defs: Ctx['defs']) {
+  const v = defs.get(c.variable);
+  return v ? `${v.name} ${c.op || '=='} ${c.value ?? ''}`.trim() : '(pick a variable)';
+}
+
 export function conditionText(n: QuestNode, defs: Ctx['defs']) {
-  const v = defs.get(n.data.variable);
-  if (v) return `${v.name} ${n.data.op || '=='} ${n.data.value ?? ''}`.trim();
-  return n.data.text || 'Set a condition';
+  const checks = conditionChecks(n);
+  if (!defs.get(n.data.variable) && checks.length === 1) return n.data.text || 'Set a condition';
+  return checks.map((c) => checkText(c, defs)).join(conditionJoin(n) === 'and' ? ' AND ' : ' OR ');
+}
+
+/** True when every check uses an existing variable, so Play mode can decide on its own. */
+export function conditionIsAutomatic(n: QuestNode, defs: Ctx['defs']) {
+  return conditionChecks(n).every((c) => !!defs.get(c.variable));
+}
+
+export function evaluateCondition(n: QuestNode, defs: Ctx['defs'], vars: Record<string, VarValue>): boolean {
+  const results = conditionChecks(n).map((c) => {
+    const d = defs.get(c.variable);
+    return !!d && evaluate(c.op || '==', vars[d.id], parseValue(varType(d), c.value));
+  });
+  return conditionJoin(n) === 'and' ? results.every(Boolean) : results.some(Boolean);
 }
 
 export function actionText(n: QuestNode, defs: Ctx['defs']) {
@@ -184,6 +217,10 @@ export function findProblems(nodes: QuestNode[], edges: QuestEdge[], items: Item
         const es = edges.filter((e) => e.source === n.id);
         if (!es.some((e) => e.source_handle !== 'no')) add(n.id, 'Nothing connected to “Yes”');
         if (n.data.variable && !defs.get(n.data.variable)) add(n.id, 'Its variable was deleted');
+        conditionChecks(n).slice(1).forEach((c, i) => {
+          if (!c.variable) add(n.id, `Check ${i + 2} has no variable`);
+          else if (!defs.get(c.variable)) add(n.id, `Check ${i + 2}: its variable was deleted`);
+        });
         break;
       }
       case 'action':

@@ -282,3 +282,12 @@ select option:checked { background: #a9d39a; color: #000; }
 .history { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
 .undo-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 1500; display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border-radius: 10px; background: #2a2620; border: 1px solid #4a453c; color: var(--text); box-shadow: 0 12px 32px rgba(0,0,0,0.55); font-size: 14px; }
 .irow.head > span { white-space: nowrap; }
+
+/* Condition checks (OR / AND) */
+.seg { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.seg button { flex: 1; padding: 7px 8px; border: none; border-radius: 7px; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.seg button.on { background: #3a2f45; color: #ead6f5; }
+.check-block { display: flex; flex-direction: column; gap: 8px; }
+.check-row { display: flex; gap: 6px; align-items: center; }
+.check-row > :first-child { flex: 1; min-width: 0; }
+.check-join { align-self: center; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #d4b0e3; padding: 2px 10px; border: 1px solid #4a3c55; border-radius: 999px; }

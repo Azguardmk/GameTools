@@ -31,6 +31,9 @@ import {
   YES,
   actionText,
   conditionText,
+  conditionChecks,
+  conditionJoin,
+  type Check,
   edgeColor,
   edgeKindFor,
   edgeLabel,
@@ -387,7 +390,15 @@ function QuestsInner() {
               case 'dialogue':
                 return { ...base, speaker: name(n.data.speaker), text: n.data.text ?? '' };
               case 'condition':
-                return { ...base, variable: name(n.data.variable), op: n.data.op ?? '==', value: n.data.value ?? '', text: n.data.variable ? '' : n.data.text ?? '' };
+                return {
+                  ...base,
+                  variable: name(n.data.variable),
+                  op: n.data.op ?? '==',
+                  value: n.data.value ?? '',
+                  text: n.data.variable ? '' : n.data.text ?? '',
+                  join: conditionJoin(n),
+                  checks: conditionChecks(n).map((c) => ({ variable: name(c.variable), op: c.op || '==', value: c.value })),
+                };
               case 'action':
                 return { ...base, variable: name(n.data.variable), op: n.data.op ?? 'set', value: n.data.value ?? '' };
               case 'external':
@@ -826,29 +837,95 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
   }
 
   if (node.kind === 'condition') {
+    const checks = conditionChecks(node);
+    const join = conditionJoin(node);
+    const more = checks.slice(1);
+    const setCheck = (i: number, patch: Partial<Check>) => {
+      if (i === 0) {
+        const p: Record<string, any> = { ...patch };
+        if ('variable' in patch) p.value = varType(defs.get(patch.variable ?? null)) === 'Boolean' ? 'true' : '';
+        set(p);
+      } else {
+        const next = more.map((c, j) => {
+          if (j !== i - 1) return c;
+          const c2 = { ...c, ...patch };
+          if ('variable' in patch) c2.value = varType(defs.get(patch.variable ?? null)) === 'Boolean' ? 'true' : '';
+          return c2;
+        });
+        set({ more: next });
+      }
+    };
+    const addCheck = () => set({ more: [...more, { id: newId(), variable: null, op: '==', value: 'true' }], join });
+    const removeCheck = (i: number) => {
+      if (i === 0) {
+        const [nextFirst, ...rest] = more;
+        set({ variable: nextFirst.variable, op: nextFirst.op, value: nextFirst.value, more: rest });
+      } else set({ more: more.filter((_, j) => j !== i - 1) });
+    };
     return (
       <>
         <span className="section-label" style={{ color: NODE_META.condition.color }}>CONDITION</span>
-        {help('Checks a story variable. The flow leaves through the green “Yes” dot or the red “No” dot.')}
-        {varPicker}
-        {node.data.variable ? (
-          <div className="grid2">
-            <label className="field">
-              <span className="field-label">Is</span>
-              <span className="select-wrap">
-                <select aria-label="Comparison" value={node.data.op ?? '=='} onChange={(e) => set({ op: e.target.value })} style={{ paddingLeft: 10 }}>
-                  {OPS.map((o) => (
-                    <option key={o}>{o}</option>
-                  ))}
-                </select>
-              </span>
-            </label>
-            <label className="field">
-              <span className="field-label">Value</span>
-              {valueField('e.g. 5')}
-            </label>
+        {help('Checks story variables. The flow leaves through the green “Yes” dot or the red “No” dot. Add more checks with OR (any one is enough) or AND (all must be true).')}
+        {checks.length > 1 && (
+          <div className="seg" role="radiogroup" aria-label="How checks combine">
+            <button type="button" role="radio" aria-checked={join === 'or'} className={join === 'or' ? 'on' : ''} onClick={() => set({ join: 'or' })}>
+              OR · any is true
+            </button>
+            <button type="button" role="radio" aria-checked={join === 'and'} className={join === 'and' ? 'on' : ''} onClick={() => set({ join: 'and' })}>
+              AND · all are true
+            </button>
           </div>
-        ) : (
+        )}
+        {checks.map((c, i) => {
+          const t = varType(defs.get(c.variable));
+          return (
+            <div key={c.id} className="check-block">
+              {i > 0 && <span className="check-join">{join.toUpperCase()}</span>}
+              <div className="check-row">
+                <DefSelect options={variables} value={c.variable} onChange={(v) => setCheck(i, { variable: v })} label={`Check ${i + 1} variable`} allowEmpty />
+                {checks.length > 1 && (
+                  <button type="button" className="icon-btn" aria-label={`Remove check ${i + 1}`} onClick={() => removeCheck(i)}>
+                    <Icon name="x" size={14} />
+                  </button>
+                )}
+              </div>
+              {c.variable && (
+                <div className="grid2">
+                  <span className="select-wrap">
+                    <select aria-label={`Check ${i + 1} comparison`} value={c.op || '=='} onChange={(e) => setCheck(i, { op: e.target.value })} style={{ paddingLeft: 10 }}>
+                      {OPS.map((o) => (
+                        <option key={o}>{o}</option>
+                      ))}
+                    </select>
+                  </span>
+                  {t === 'Boolean' ? (
+                    <span className="select-wrap">
+                      <select aria-label={`Check ${i + 1} value`} value={c.value || 'true'} onChange={(e) => setCheck(i, { value: e.target.value })} style={{ paddingLeft: 10 }}>
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </span>
+                  ) : (
+                    <TextField value={c.value} label={`Check ${i + 1} value`} placeholder="e.g. 5" type={t === 'Integer' ? 'number' : 'text'} onCommit={(v) => setCheck(i, { value: v })} />
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {node.data.variable && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn small" onClick={() => (checks.length === 1 ? set({ more: [{ id: newId(), variable: null, op: '==', value: 'true' }], join: 'or' }) : addCheck())}>
+              <Icon name="plus" size={14} /> {checks.length === 1 ? 'Add OR variable' : `Add ${join.toUpperCase()} variable`}
+            </button>
+            {checks.length === 1 && (
+              <button type="button" className="btn small" onClick={() => set({ more: [{ id: newId(), variable: null, op: '==', value: 'true' }], join: 'and' })}>
+                <Icon name="plus" size={14} /> Add AND variable
+              </button>
+            )}
+          </div>
+        )}
+        {!node.data.variable && checks.length === 1 && (
           <label className="field">
             <span className="field-label">Or describe the rule in words</span>
             <TextField multiline value={node.data.text ?? ''} label="Condition text" placeholder="e.g. Level ≥ 5, Reputation ≥ Friendly" onCommit={(v) => set({ text: v })} />
