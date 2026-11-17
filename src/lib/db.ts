@@ -9,8 +9,15 @@ import { TABLES, type Table } from './types';
  * Every write updates a local cache first so the UI feels instant, then persists.
  */
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// The team's Supabase project. The publishable key is meant to be public:
+// access is limited to signed-in users by the row-level security policies in supabase/schema.sql.
+// Override with VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, or set VITE_DEMO=1 to run without a database.
+const DEFAULT_URL = 'https://enaxshmiobwahcltftyi.supabase.co';
+const DEFAULT_KEY = 'sb_publishable_LmQjemJOtUQV8ouJwQ2cbA_AmESxaZz';
+
+const demo = import.meta.env.VITE_DEMO === '1';
+const url = demo ? undefined : ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || DEFAULT_URL);
+const key = demo ? undefined : ((import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || DEFAULT_KEY);
 
 export const supabase: SupabaseClient | null = url && key ? createClient(url, key) : null;
 export const MODE: 'shared' | 'demo' = supabase ? 'shared' : 'demo';

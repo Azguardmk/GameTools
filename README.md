@@ -17,25 +17,22 @@ npm install
 npm run dev
 ```
 
-With no Supabase keys, the app runs in **demo mode**: it fills itself with sample data and saves only in your own browser. That's handy for trying things out, but nothing is shared.
+The app connects to the team's Supabase project (`earthlings-tools` in the ThePixelator organization, set in `src/lib/db.ts`), so you sign in with your invited email. To try things without a database, run `VITE_DEMO=1 npm run dev`. Demo mode fills itself with sample data and saves only in your browser.
 
-## Make it shared (Supabase, free tier)
+## Supabase setup
 
-1. Create a project at <https://supabase.com>.
-2. In **SQL Editor**, paste and run [`supabase/schema.sql`](supabase/schema.sql). It creates the tables, allows only signed-in users, and turns on live updates.
-3. In **Authentication → Sign In / Providers → Email**, keep email enabled. Then in **Authentication → Users**, use **Invite user** for yourself and each collaborator. The login screen only lets in invited emails (`shouldCreateUser: false`).
-4. In **Authentication → URL Configuration**, set **Site URL** to your GitHub Pages address (e.g. `https://<owner>.github.io/GameTools/`) and add it under **Redirect URLs**.
-5. In **Project Settings → API**, copy the **Project URL** and the **anon public** key.
-6. For local development, copy `.env.example` to `.env.local` and fill in the two values.
-7. The first time someone signs in, the app offers to **Load starter data** (the lists from the design plus samples). Edit or delete anything afterwards.
+The database tables, security rules and live updates are already set up (`supabase/schema.sql`). Three things have to be done in the Supabase dashboard:
 
-The anon key is meant to be public. Access is protected by the row-level security policies in `schema.sql`, which allow only signed-in users.
+1. **Authentication → URL Configuration**: set **Site URL** to `https://azguardmk.github.io/GameTools/` and add the same address (plus `http://localhost:5173/` for local work) under **Redirect URLs**. Otherwise sign-in links point to the wrong place.
+2. **Authentication → Users → Invite user**: invite yourself and each collaborator. Only invited emails can sign in.
+3. The first person to sign in clicks **Load starter data** to fill in the lists (categories, rarities, quest types…) and the samples. Edit or delete anything afterwards.
+
+The publishable key in the code is meant to be public. The row-level security policies only allow signed-in users to read or change data.
 
 ## Deploy to GitHub Pages
 
 1. In the repo, go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
-2. In **Settings → Secrets and variables → Actions**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-3. Push to `main` (or run the workflow by hand from the **Actions** tab). The site appears at `https://<owner>.github.io/<repo>/`.
+2. Push to `main` (or run **Deploy to GitHub Pages** from the **Actions** tab). The site is published at `https://azguardmk.github.io/GameTools/`.
 
 ## How the data fits together
 

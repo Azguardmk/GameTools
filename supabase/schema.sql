@@ -98,15 +98,25 @@ create table if not exists quest_edges (
   label text not null default ''
 );
 
+create index if not exists tasks_group_idx on tasks(group_id);
+create index if not exists items_category_idx on items(category);
+create index if not exists items_rarity_idx on items(rarity);
+create index if not exists tasks_priority_idx on tasks(priority);
+create index if not exists tasks_status_idx on tasks(status);
+create index if not exists quest_nodes_chain_idx on quest_nodes(chain_id);
+create index if not exists quest_edges_chain_idx on quest_edges(chain_id);
+create index if not exists quest_edges_source_idx on quest_edges(source);
+create index if not exists quest_edges_target_idx on quest_edges(target);
+
 -- Only signed-in team members can read or change anything.
 do $$
 declare t text;
 begin
   foreach t in array array['members','definitions','task_groups','tasks','items','quest_chains','quest_nodes','quest_edges'] loop
-    execute format('alter table %I enable row level security', t);
-    execute format('drop policy if exists "team access" on %I', t);
-    execute format('create policy "team access" on %I for all to authenticated using (true) with check (true)', t);
-    execute format('alter table %I replica identity full', t);
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "team access" on public.%I', t);
+    execute format('create policy "team access" on public.%I for all to authenticated using (true) with check (true)', t);
+    execute format('alter table public.%I replica identity full', t);
   end loop;
 end $$;
 
@@ -116,7 +126,7 @@ declare t text;
 begin
   foreach t in array array['members','definitions','task_groups','tasks','items','quest_chains','quest_nodes','quest_edges'] loop
     begin
-      execute format('alter publication supabase_realtime add table %I', t);
+      execute format('alter publication supabase_realtime add table public.%I', t);
     exception when duplicate_object then null;
     end;
   end loop;
