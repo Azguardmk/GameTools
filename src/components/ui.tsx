@@ -171,9 +171,15 @@ export function SwatchPicker({ value, onChange, label }: { value: string; onChan
   );
 }
 
-export function Icon({ name, size = 16 }: { name: 'plus' | 'trash' | 'warn' | 'download' | 'chevron' | 'up' | 'down' | 'search' | 'link' | 'x'; size?: number }) {
+export function Icon({ name, size = 16 }: { name: 'plus' | 'copy' | 'trash' | 'warn' | 'download' | 'chevron' | 'up' | 'down' | 'search' | 'link' | 'x'; size?: number }) {
   const paths: Record<string, ReactNode> = {
     plus: <path d="M12 5v14M5 12h14" />,
+    copy: (
+      <>
+        <rect x="9" y="9" width="11" height="11" rx="2" />
+        <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+      </>
+    ),
     trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
     warn: (
       <>

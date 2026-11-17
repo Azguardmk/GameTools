@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Background,
@@ -94,8 +94,15 @@ function QuestsInner() {
   // React Flow keeps its own node list while dragging; rebuild it whenever the data changes.
   // Keeps the current selection (one or many nodes) when the data refreshes.
   const [rfNodes, setRfNodes] = useState<Node[]>([]);
+  const pendingSelect = useRef<Set<string> | null>(null);
   useEffect(() => {
     setRfNodes((prev) => {
+      // Right after duplicating, select the copies instead of the originals.
+      const pending = pendingSelect.current;
+      if (pending && chainNodes.some((n) => pending.has(n.id))) {
+        pendingSelect.current = null;
+        return chainNodes.map((n) => ({ id: n.id, type: n.kind, position: { x: n.x, y: n.y }, data: { node: n }, selected: pending.has(n.id) }));
+      }
       const was = new Set(prev.filter((p) => p.selected).map((p) => p.id));
       return chainNodes.map((n) => ({ id: n.id, type: n.kind, position: { x: n.x, y: n.y }, data: { node: n }, selected: was.has(n.id) || n.id === selId }));
     });
@@ -173,6 +180,65 @@ function QuestsInner() {
     }
     insert('quest_edges', { id: newId(), chain_id: chainId, source: c.source, target: c.target, kind, label, source_handle: kind === 'condition' ? handle ?? 'yes' : kind === 'choice' ? handle : null });
   };
+
+  /** Copies nodes (and the links between them) a little down and to the right, then selects the copies. */
+  const duplicateNodes = async (ids: string[]) => {
+    const src = chainNodes.filter((n) => ids.includes(n.id));
+    if (!src.length) return;
+    const idMap = new Map<string, string>();
+    const handleMap = new Map<string, string>();
+    const takenCodes = new Set(snapshot<QuestNode>('quest_nodes').map((n) => n.data?.code).filter(Boolean));
+    const copies = src.map((n) => {
+      const id = newId();
+      idMap.set(n.id, id);
+      const data = JSON.parse(JSON.stringify(n.data ?? {}));
+      if (n.kind === 'quest' && data.code) {
+        let code = data.code + '_COPY';
+        for (let i = 2; takenCodes.has(code); i++) code = `${data.code}_COPY${i}`;
+        takenCodes.add(code);
+        data.code = code;
+      }
+      if (n.kind === 'choice' && Array.isArray(data.options)) {
+        data.options = data.options.map((o: ChoiceOption) => {
+          const copy = newOption(o.text);
+          handleMap.set(o.id, copy.id);
+          return copy;
+        });
+      }
+      return { id, chain_id: n.chain_id, kind: n.kind, x: Math.round(n.x + 50), y: Math.round(n.y + 50), data };
+    });
+    const links = chainEdges
+      .filter((e) => idMap.has(e.source) && idMap.has(e.target))
+      .map((e) => ({
+        id: newId(),
+        chain_id: e.chain_id,
+        source: idMap.get(e.source)!,
+        target: idMap.get(e.target)!,
+        kind: e.kind,
+        label: e.label,
+        source_handle: e.source_handle ? handleMap.get(e.source_handle) ?? e.source_handle : null,
+      }));
+    pendingSelect.current = new Set(copies.map((c) => c.id));
+    setSelectedEdges(new Set());
+    if (copies.length === 1) setSel(copies[0].id);
+    else setSel(null);
+    await insert('quest_nodes', copies);
+    if (links.length) await insert('quest_edges', links);
+  };
+
+  // Ctrl+D / Cmd+D duplicates the selection (unless you're typing in a field).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'd') return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      if (!selectedIds.length) return;
+      e.preventDefault();
+      duplicateNodes(selectedIds);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const deleteNodes = async (ids: string[]) => {
     const edgeIds = snapshot<QuestEdge>('quest_edges')
@@ -447,6 +513,7 @@ function QuestsInner() {
               {selectedIds.length > 1 ? (
                 <MultiPanel
                   count={selectedIds.length}
+                  onDuplicate={() => duplicateNodes(selectedIds)}
                   onDelete={() => confirm(`Delete these ${selectedIds.length} nodes and their links?`) && deleteNodes(selectedIds)}
                   onClear={() => setRfNodes((ns) => ns.map((n) => ({ ...n, selected: false })))}
                 />
@@ -460,7 +527,15 @@ function QuestsInner() {
                 />
               ) : showProblems && !selected ? (
                 <ProblemList problems={problems} onOpen={(n) => { setShowProblems(false); openChain(n.chain_id, n.id); }} />
-              ) : selected?.kind === 'quest' ? (
+              ) : null}
+              {selected && selectedIds.length <= 1 && (
+                <div className="list-row" style={{ justifyContent: 'flex-end', marginBottom: -8 }}>
+                  <button type="button" className="btn small" onClick={() => duplicateNodes([selected.id])} title="Duplicate (Ctrl+D)">
+                    <Icon name="copy" size={14} /> Duplicate
+                  </button>
+                </div>
+              )}
+              {selectedIds.length > 1 || (selectedEdges.size > 0 && !selected) || (showProblems && !selected) ? null : selected?.kind === 'quest' ? (
                 <QuestPanel key={selected.id} node={selected} edges={chainEdges} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
               ) : selected ? (
                 <OtherPanel key={selected.id} node={selected} chainId={chainId!} edges={chainEdges} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
@@ -1088,14 +1163,17 @@ function CharacterField({ value, fallback, label, onChange }: { value: string | 
   );
 }
 
-function MultiPanel({ count, onDelete, onClear }: { count: number; onDelete: () => void; onClear: () => void }) {
+function MultiPanel({ count, onDuplicate, onDelete, onClear }: { count: number; onDuplicate: () => void; onDelete: () => void; onClear: () => void }) {
   return (
     <>
       <span className="section-label">{count} NODES SELECTED</span>
       <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-        Drag any of them to move them all together. Ctrl-click (Cmd-click on Mac) a node to add it to or remove it from the selection.
+        Drag any of them to move them all together. Duplicating also copies the links between them. Ctrl-click (Cmd-click on Mac) a node to add it to or remove it from the selection.
       </p>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn" onClick={onDuplicate} title="Duplicate (Ctrl+D)">
+          <Icon name="copy" /> Duplicate {count} nodes
+        </button>
         <button type="button" className="btn warn" onClick={onDelete}>
           <Icon name="trash" /> Delete {count} nodes
         </button>
