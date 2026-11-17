@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions, useMembers } from '../lib/hooks';
 import { LISTS, enumKey, type Definition, type Item, type ListKey, type QuestNode, type Task } from '../lib/types';
-import { Icon, SwatchPicker, TextField } from '../components/ui';
+import { DefSelect, Icon, SwatchPicker, TextField } from '../components/ui';
 
 type View = ListKey | 'members';
 
@@ -14,7 +14,7 @@ export default function DefinitionsPage() {
 
   const groups: { name: string; items: { key: View; title: string; n: number }[] }[] = [
     { name: 'TEAM', items: [{ key: 'members', title: 'Team members', n: members.list.length }] },
-    ...(['Items', 'Quests', 'Tasks'] as const).map((g) => ({
+    ...(['World', 'Items', 'Quests', 'Tasks'] as const).map((g) => ({
       name: g.toUpperCase(),
       items: LISTS.filter((l) => l.group === g).map((l) => ({ key: l.key as View, title: l.title, n: defs.list(l.key).length })),
     })),
@@ -23,7 +23,12 @@ export default function DefinitionsPage() {
   const exportAll = () => {
     const out: Record<string, unknown> = {};
     for (const l of LISTS) {
-      out[l.enumName] = defs.list(l.key).map((d) => ({ key: enumKey(d.name), name: d.name, color: d.color, ...d.extra }));
+      out[l.enumName] = defs.list(l.key).map((d) => {
+        const extra: Record<string, string> = { ...d.extra };
+        // Fields that point at another list are exported as that entry's enum key.
+        l.extras.filter((x) => x.ref).forEach((x) => (extra[x.key] = extra[x.key] ? enumKey(defs.get(extra[x.key])?.name ?? '') : ''));
+        return { key: enumKey(d.name), name: d.name, color: d.color, ...extra };
+      });
     }
     download('earthlings-definitions.json', JSON.stringify(out, null, 2), 'application/json');
   };
@@ -60,6 +65,7 @@ function useUsage() {
   const { rows: items } = useTable<Item>('items');
   const { rows: nodes } = useTable<QuestNode>('quest_nodes');
   const { rows: tasks } = useTable<Task>('tasks');
+  const { rows: defRows } = useTable<Definition>('definitions');
   return useMemo(() => {
     const m = new Map<string, number>();
     const add = (id: string | null | undefined) => id && m.set(id, (m.get(id) ?? 0) + 1);
@@ -73,19 +79,21 @@ function useUsage() {
       if (n.kind !== 'quest') continue;
       const d = n.data;
       add(d.type);
-      add(d.zone);
+      add(d.region);
+      add(d.district);
       add(d.status);
       add(d.assignee);
       d.objectives?.forEach((o: { type: string }) => add(o.type));
       d.rewards?.forEach((r: { type: string }) => add(r.type));
     }
+    for (const d of defRows) if (d.list === 'district') add(d.extra?.region);
     for (const t of tasks) {
       add(t.priority);
       add(t.status);
       t.assignees.forEach(add);
     }
     return m;
-  }, [items, nodes, tasks]);
+  }, [items, nodes, tasks, defRows]);
 }
 
 function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, number> }) {
@@ -113,7 +121,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
     update('definitions', b.id, { sort: a.sort === b.sort ? a.sort + dir : a.sort });
   };
 
-  const cols = `74px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map(() => '120px').join(' ')} 110px 48px`;
+  const cols = `74px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : '120px')).join(' ')} 110px 48px`;
 
   return (
     <>
@@ -172,6 +180,16 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
               </span>
               {meta.extras.map((x) => (
                 <span key={x.key} className="cell">
+                  {x.ref ? (
+                    <DefSelect
+                      className="bare"
+                      options={defs.list(x.ref)}
+                      value={r.extra?.[x.key] || null}
+                      allowEmpty
+                      label={x.label + ' of ' + r.name}
+                      onChange={(v) => update('definitions', r.id, { extra: { ...r.extra, [x.key]: v ?? '' } })}
+                    />
+                  ) : (
                   <TextField
                     className="input bare"
                     value={r.extra?.[x.key] ?? ''}
@@ -179,6 +197,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
                     label={x.label + ' of ' + r.name}
                     onCommit={(v) => update('definitions', r.id, { extra: { ...r.extra, [x.key]: v } })}
                   />
+                  )}
                 </span>
               ))}
               <span className="cell" style={{ color: used ? 'var(--text-2)' : 'var(--faint)', paddingLeft: 14 }}>

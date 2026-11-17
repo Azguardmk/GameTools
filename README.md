@@ -6,7 +6,7 @@ A shared web tool for the Earthlings team:
 - **Quests**: a node editor for quest chains. It has quests, conditions, player choices, links to quests in other chains, objectives, required items, rewards and problem checks, and exports JSON for Unreal.
 - **Quest map**: every quest by name, grouped by chain, with links between chains.
 - **Items**: an item database with categories, rarities, crafting recipes, blueprints, how to get each item and where it's used. It exports a CSV for an Unreal DataTable.
-- **Definitions**: the lists everything else picks from (team members, item categories, rarities, stations, quest types, zones and so on). They export as JSON enums.
+- **Definitions**: the lists everything else picks from (team members, item categories, rarities, stations, quest types, regions, districts and so on). They export as JSON enums.
 
 It's built with React, Vite and React Flow, hosted on GitHub Pages, with data in Supabase.
 
@@ -39,7 +39,7 @@ The publishable key in the code is meant to be public. The row-level security po
 | Table | What it holds |
 |---|---|
 | `members` | Team members (name, initials, badge colour) |
-| `definitions` | Every pre-defined list; `list` says which one, `extra` holds list-specific fields (ID prefix, default stack, tier, region) |
+| `definitions` | Every pre-defined list; `list` says which one, `extra` holds list-specific fields (ID prefix, default stack, tier, a district's region and plot count) |
 | `task_groups`, `tasks` | The task board |
 | `items` | Items; `sources` and `recipe` are JSON; `teaches` links a blueprint to the item it teaches |
 | `quest_chains`, `quest_nodes`, `quest_edges` | The quest graph; nodes are `quest`, `condition`, `choice` or `external` (a quest in another chain) |

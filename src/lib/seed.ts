@@ -55,12 +55,22 @@ export function buildSeed(): Record<Table, Row[]> {
     daily: d('quest_type', 'Daily', '#8fbf74'),
     guild: d('quest_type', 'Guild', '#c294d6'),
   };
+  const region = {
+    newParis: d('region', 'New Paris', '#ef7d3e'),
+    floatingIslands: d('region', 'Floating Islands', '#6fb3d6'),
+    europe: d('region', 'Europe', '#8fbf74'),
+  };
+  const district = (name: string, color: string, plots: string) => d('district', name, color, { region: region.newParis, plots });
   const zone = {
-    tramyard: d('zone', 'Tramyard', '#a8835a', { region: 'NewParis' }),
-    clocktower: d('zone', 'Clocktower', '#d9a75e', { region: 'NewParis' }),
-    guildhall: d('zone', 'Guildhall', '#c294d6', { region: 'NewParis' }),
-    undercity: d('zone', 'Undercity', '#5f8fa8', { region: 'NewParis' }),
-    harbor: d('zone', 'Harbor Docks', '#6f9a58', { region: 'NewParis' }),
+    tramyard: district('City Center', '#ef7d3e', '217'),
+    clocktower: district('Sheng District', '#f5b301', '147'),
+    guildhall: district('Wagner District', '#e8c95a', '180'),
+    thorn: district('Thorn District', '#b39ea0', '149'),
+    voss: district('Voss District', '#e3ad6a', '171'),
+    navarro: district('Navarro District', '#9e9a6e', '124'),
+    lacVert: district('Lac Vert', '#8bbd5a', '12'),
+    ruins: district('The Ruins', '#c2a91a', '0'),
+    undercity: district('The Underground', '#c9663a', '0'),
   };
   const obj = {
     kill: d('objective_type', 'Kill', '#e0805d'),
@@ -172,39 +182,39 @@ export function buildSeed(): Record<Table, Row[]> {
   ];
   const q = (chain_id: string, x: number, y: number, data: Partial<QuestData>) => ({
     id: newId(), chain_id, kind: 'quest', x, y,
-    data: { code: '', name: '', description: '', level: '', giver: '', type: qt.main, zone: null, status: qs.draft, assignee: null,
+    data: { code: '', name: '', description: '', level: '', giver: '', type: qt.main, region: region.newParis, district: null, status: qs.draft, assignee: null,
       objectives: [], required_items: [], rewards: [], ...data },
   });
   const n = (chain_id: string, kind: string, x: number, y: number, data: Record<string, any>) => ({ id: newId(), chain_id, kind, x, y, data });
 
-  const sworn = q(ch.watch, 280, 120, { code: 'Q_CW_002', name: 'Sworn to the Watch', level: '6–8', giver: 'Captain Ferrand', zone: zone.tramyard, assignee: m.f2,
+  const sworn = q(ch.watch, 280, 120, { code: 'Q_CW_002', name: 'Sworn to the Watch', level: '6–8', giver: 'Captain Ferrand', district: zone.tramyard, assignee: m.f2,
     objectives: [{ type: obj.interact, text: 'Take the oath at the Watch house', count: 1 }], rewards: [{ type: rw.rep, text: 'City Watch', item: null, amount: 250 }] });
-  const nightShift = q(ch.watch, 0, 120, { code: 'Q_CW_001', name: 'Night Shift', level: '5–6', giver: 'Captain Ferrand', zone: zone.tramyard, assignee: m.f2,
+  const nightShift = q(ch.watch, 0, 120, { code: 'Q_CW_001', name: 'Night Shift', level: '5–6', giver: 'Captain Ferrand', district: zone.tramyard, assignee: m.f2,
     objectives: [{ type: obj.reach, text: 'Patrol the tram line', count: 1 }], rewards: [{ type: rw.xp, text: '', item: null, amount: 150 }] });
 
   const cond = n(ch.brass, 'condition', -230, 140, { text: 'Level ≥ 5' });
-  const smoke = q(ch.brass, 0, 100, { code: 'Q_NP_001', name: 'Smoke over the Tramyard', level: '5–7', giver: 'Engineer Odile', zone: zone.tramyard,
+  const smoke = q(ch.brass, 0, 100, { code: 'Q_NP_001', name: 'Smoke over the Tramyard', level: '5–7', giver: 'Engineer Odile', district: zone.tramyard,
     status: qs.review, assignee: m.filip, description: 'Steam valves are bursting across the tram depot. Odile suspects sabotage.',
     objectives: [{ type: obj.interact, text: 'Inspect burst steam valves', count: 3 }, { type: obj.kill, text: 'Rust Rats', count: 8 }, { type: obj.deliver, text: 'Report back to Odile', count: 1 }],
     rewards: [{ type: rw.xp, text: '', item: null, amount: 250 }, { type: rw.currency, text: 'Cogs', item: it.cogs, amount: 40 }, { type: rw.item, text: '', item: it.belt, amount: 1 }] });
-  const gears = q(ch.brass, 300, 100, { code: 'Q_NP_002', name: 'Gears for the Clocktower', level: '6–8', giver: 'Clockmaster Venn', zone: zone.clocktower,
+  const gears = q(ch.brass, 300, 100, { code: 'Q_NP_002', name: 'Gears for the Clocktower', level: '6–8', giver: 'Clockmaster Venn', district: zone.clocktower,
     assignee: m.f1, description: 'The great clock has stopped. Venn needs parts no honest merchant will sell.',
     objectives: [{ type: obj.collect, text: 'Brass Gear', count: 5 }, { type: obj.interact, text: 'Repair the clock mechanism', count: 1 }],
     required_items: [{ item: it.gear, qty: 5 }],
     rewards: [{ type: rw.xp, text: '', item: null, amount: 400 }, { type: rw.blueprint, text: '', item: it.bpRegulator, amount: 1 }, { type: rw.item, text: '', item: it.wrench, amount: 1 }] });
   const choice = n(ch.brass, 'choice', 600, 130, { text: 'Protect or expose the Guild?' });
-  const favor = q(ch.brass, 860, 0, { code: 'Q_NP_003a', name: "The Guild's Favor", level: '8–10', giver: 'Clockmaster Venn', zone: zone.guildhall,
+  const favor = q(ch.brass, 860, 0, { code: 'Q_NP_003a', name: "The Guild's Favor", level: '8–10', giver: 'Clockmaster Venn', district: zone.guildhall,
     objectives: [{ type: obj.deliver, text: 'Sealed ledger to the Guildhall', count: 1 }] });
-  const whistle = q(ch.brass, 860, 220, { code: 'Q_NP_003b', name: 'Whistleblower', level: '8–10', giver: 'Inspector Marot', zone: zone.guildhall, assignee: m.f2,
+  const whistle = q(ch.brass, 860, 220, { code: 'Q_NP_003b', name: 'Whistleblower', level: '8–10', giver: 'Inspector Marot', district: zone.guildhall, assignee: m.f2,
     objectives: [{ type: obj.interact, text: 'Steal the ledger', count: 1 }, { type: obj.reach, text: 'Escape the Guildhall', count: 1 }],
     rewards: [{ type: rw.xp, text: '', item: null, amount: 600 }, { type: rw.rep, text: 'Clockmakers Guild', item: null, amount: -500 },
       { type: rw.rep, text: 'City Watch', item: null, amount: 750 }, { type: rw.title, text: 'The Whistleblower', item: null, amount: 1 }] });
   const extSworn = n(ch.brass, 'external', 600, 380, { ref: sworn.id });
 
-  const drains = q(ch.undercity, 280, 100, { code: 'Q_UC_001', name: 'Into the Drains', level: '9–10', giver: 'Inspector Marot', zone: zone.undercity,
+  const drains = q(ch.undercity, 280, 100, { code: 'Q_UC_001', name: 'Into the Drains', level: '9–10', giver: 'Inspector Marot', district: zone.undercity,
     objectives: [{ type: obj.reach, text: 'Enter the Undercity', count: 1 }], rewards: [{ type: rw.xp, text: '', item: null, amount: 500 }] });
   const extWhistle = n(ch.undercity, 'external', 0, 110, { ref: whistle.id });
-  const ratKing = q(ch.undercity, 580, 100, { code: 'Q_UC_002', name: "Rat King's Toll", level: '10–11', giver: 'Rat King', zone: zone.undercity,
+  const ratKing = q(ch.undercity, 580, 100, { code: 'Q_UC_002', name: "Rat King's Toll", level: '10–11', giver: 'Rat King', district: zone.undercity,
     objectives: [{ type: obj.collect, text: 'Power Cell', count: 2 }], required_items: [{ item: it.cell, qty: 2 }], rewards: [{ type: rw.xp, text: '', item: null, amount: 650 }] });
 
   const quest_nodes = [cond, smoke, gears, choice, favor, whistle, extSworn, nightShift, sworn, extWhistle, drains, ratKing];

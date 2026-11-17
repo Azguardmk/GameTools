@@ -267,7 +267,7 @@ function QuestsInner() {
     const count = chainNodes.filter((n) => n.kind === 'quest').length + 1;
     const data: QuestData = {
       code: `Q_${prefix}_${String(count).padStart(3, '0')}`, name: '', description: '', level: '', giver: '',
-      type: defs.list('quest_type')[0]?.id ?? null, zone: null, status: defs.list('quest_status')[0]?.id ?? null, assignee: null,
+      type: defs.list('quest_type')[0]?.id ?? null, region: null, district: null, status: defs.list('quest_status')[0]?.id ?? null, assignee: null,
       objectives: [], required_items: [], rewards: [],
     };
     addNode('quest', data as unknown as Record<string, unknown>);
@@ -325,7 +325,7 @@ function QuestsInner() {
             const d = n.data as QuestData;
             return {
               id: d.code, name: d.name, description: d.description, level: d.level, giver: d.giver,
-              type: name(d.type), zone: name(d.zone), devStatus: name(d.status),
+              type: name(d.type), region: name(d.region ?? defs.get(d.district)?.extra.region), district: name(d.district), devStatus: name(d.status),
               objectives: d.objectives.map((o) => ({ type: name(o.type), text: o.text, count: o.count })),
               requiredItems: d.required_items.map((r) => ({ item: code(r.item), qty: r.qty })),
               rewards: d.rewards.map((r) => ({ type: name(r.type), text: r.text, item: code(r.item), amount: r.amount })),
@@ -633,8 +633,24 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
           <DefSelect options={defs.list('quest_type')} value={d.type} onChange={(v) => set({ type: v })} label="Quest type" />
         </label>
         <label className="field">
-          <span className="field-label">Zone</span>
-          <DefSelect options={defs.list('zone')} value={d.zone} onChange={(v) => set({ zone: v })} label="Zone" allowEmpty />
+          <span className="field-label">Region</span>
+          <DefSelect
+            options={defs.list('region')}
+            value={d.region ?? defs.get(d.district)?.extra.region ?? null}
+            onChange={(v) => set({ region: v, district: v && defs.get(d.district)?.extra.region === v ? d.district : null })}
+            label="Region"
+            allowEmpty
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">District</span>
+          <DefSelect
+            options={defs.list('district').filter((x) => !(d.region ?? defs.get(d.district)?.extra.region) || x.extra.region === (d.region ?? defs.get(d.district)?.extra.region))}
+            value={d.district}
+            onChange={(v) => set({ district: v, region: v ? defs.get(v)?.extra.region ?? d.region : d.region })}
+            label="District"
+            allowEmpty
+          />
         </label>
         <label className="field">
           <span className="field-label">Status</span>

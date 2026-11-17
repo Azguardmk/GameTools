@@ -116,7 +116,8 @@ export interface QuestData {
   level: string;
   giver: string;
   type: string | null;
-  zone: string | null;
+  region: string | null; // definition id (region)
+  district: string | null; // definition id (district)
   status: string | null;
   assignee: string | null;
   objectives: Objective[];
@@ -151,7 +152,8 @@ export type ListKey =
   | 'station'
   | 'source_type'
   | 'quest_type'
-  | 'zone'
+  | 'region'
+  | 'district'
   | 'objective_type'
   | 'reward_type'
   | 'quest_status'
@@ -160,11 +162,11 @@ export type ListKey =
 
 export interface ListMeta {
   key: ListKey;
-  group: 'Items' | 'Quests' | 'Tasks';
+  group: 'World' | 'Items' | 'Quests' | 'Tasks';
   title: string;
   enumName: string;
   description: string;
-  extras: { key: string; label: string; placeholder?: string }[];
+  extras: { key: string; label: string; placeholder?: string; ref?: ListKey }[];
 }
 
 export const LISTS: ListMeta[] = [
@@ -180,8 +182,11 @@ export const LISTS: ListMeta[] = [
     description: 'Ways a player can get an item.', extras: [] },
   { key: 'quest_type', group: 'Quests', title: 'Quest types', enumName: 'E_QuestType',
     description: 'The kind of quest, shown on every quest node.', extras: [] },
-  { key: 'zone', group: 'Quests', title: 'Zones', enumName: 'E_Zone',
-    description: 'Where quests take place.', extras: [{ key: 'region', label: 'Region', placeholder: 'NewParis' }] },
+  { key: 'region', group: 'World', title: 'Regions', enumName: 'E_Region',
+    description: 'The big areas of the world (New Paris, Floating Islands, Europe…). Districts belong to a region.', extras: [] },
+  { key: 'district', group: 'World', title: 'Districts', enumName: 'E_District',
+    description: 'Districts inside a region, with their plot count. Quests and other content can be placed in a district.',
+    extras: [{ key: 'region', label: 'Region', ref: 'region' }, { key: 'plots', label: 'Plots', placeholder: '0' }] },
   { key: 'objective_type', group: 'Quests', title: 'Objective types', enumName: 'E_ObjectiveType',
     description: 'What a quest asks the player to do.', extras: [] },
   { key: 'reward_type', group: 'Quests', title: 'Reward types', enumName: 'E_RewardType',
