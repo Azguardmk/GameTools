@@ -33,7 +33,9 @@ import {
   edgeColor,
   edgeKindFor,
   edgeLabel,
+  choiceOptions,
   findProblems,
+  type ChoiceOption,
   nodeTypes,
   edgeTypes,
   questLabel,
@@ -102,6 +104,12 @@ function QuestsInner() {
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const [boxMode, setBoxMode] = useState(false);
 
+  const choiceEdgeLabel = (e: QuestEdge) => {
+    if (e.kind !== 'choice' || !e.source_handle) return undefined;
+    const opts = choiceOptions(chainNodes.find((n) => n.id === e.source));
+    const i = opts.findIndex((o) => o.id === e.source_handle);
+    return i < 0 ? undefined : `${i + 1}. ${opts[i].text || 'Option ' + (i + 1)}`;
+  };
   const rfEdges: Edge[] = useMemo(
     () =>
       chainEdges.map((e) => ({
@@ -112,11 +120,12 @@ function QuestsInner() {
         target: e.target,
         selected: selectedEdges.has(e.id),
         interactionWidth: 26,
-        data: { label: edgeLabel(e), color: edgeColor(e) },
+        data: { label: choiceEdgeLabel(e) ?? edgeLabel(e), color: edgeColor(e) },
         style: { stroke: edgeColor(e), strokeWidth: selectedEdges.has(e.id) ? 4 : 2.5, strokeDasharray: e.kind === 'external' ? '6 6' : undefined },
         markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor(e), width: 16, height: 16 },
       })),
-    [chainEdges, selectedEdges],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chainEdges, selectedEdges, chainNodes],
   );
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -150,16 +159,20 @@ function QuestsInner() {
     const kind = edgeKindFor(src);
     let label = '';
     if (kind === 'choice') {
-      const l = prompt('What does the player choose on this path? (e.g. Protect the Guild)');
-      if (l === null) return;
-      label = l;
+      const opt = choiceOptions(src).find((o) => o.id === handle);
+      if (opt) label = opt.text;
+      else {
+        const l = prompt('What does the player choose on this path? (e.g. Protect the Guild)');
+        if (l === null) return;
+        label = l;
+      }
     }
     if (kind === 'response') {
       const l = prompt('The player’s reply on this path (leave empty for a plain “Continue”)');
       if (l === null) return;
       label = l;
     }
-    insert('quest_edges', { id: newId(), chain_id: chainId, source: c.source, target: c.target, kind, label, source_handle: kind === 'condition' ? handle ?? 'yes' : null });
+    insert('quest_edges', { id: newId(), chain_id: chainId, source: c.source, target: c.target, kind, label, source_handle: kind === 'condition' ? handle ?? 'yes' : kind === 'choice' ? handle : null });
   };
 
   const deleteNodes = async (ids: string[]) => {
@@ -268,6 +281,8 @@ function QuestsInner() {
                 return { ...base, quest: ctx.allNodes.get(n.data.ref)?.data.code ?? '' };
               case 'end':
                 return { ...base, outcome: n.data.outcome ?? 'success', text: n.data.text ?? '' };
+              case 'choice':
+                return { ...base, text: n.data.text ?? '', options: choiceOptions(n).map((o, i) => ({ option: i + 1, text: o.text })) };
               default:
                 return { ...base, text: n.data.text ?? '' };
             }
@@ -278,6 +293,10 @@ function QuestsInner() {
           type: e.kind,
           label: e.label,
           output: e.kind === 'condition' ? (e.source_handle === 'no' ? 'No' : 'Yes') : undefined,
+          option:
+            e.kind === 'choice' && e.source_handle
+              ? choiceOptions(ctx.allNodes.get(e.source)).findIndex((o) => o.id === e.source_handle) + 1 || undefined
+              : undefined,
         })),
       };
     });
@@ -338,7 +357,7 @@ function QuestsInner() {
                 ['start', () => addNode('start', { text: '' })],
                 ['quest', addQuest],
                 ['dialogue', () => addNode('dialogue', { speaker: null, text: '' })],
-                ['choice', () => addNode('choice', { text: '' })],
+                ['choice', () => addNode('choice', { text: '', options: [newOption('Option 1'), newOption('Option 2')] })],
                 ['condition', () => addNode('condition', { variable: null, op: '==', value: 'true', text: '' })],
                 ['action', () => addNode('action', { variable: null, op: 'set', value: 'true' })],
                 ['external', () => addNode('external', { ref: null })],
@@ -397,6 +416,10 @@ function QuestsInner() {
                   onEdgeDoubleClick={(_e, edge) => {
                     const e = chainEdges.find((x) => x.id === edge.id);
                     if (e?.kind !== 'choice' && e?.kind !== 'response') return;
+                    if (e.kind === 'choice' && e.source_handle) {
+                      setSel(e.source);
+                      return;
+                    }
                     const label = prompt(e.kind === 'choice' ? 'Option text' : 'Player’s reply (empty = Continue)', e.label);
                     if (label !== null) update('quest_edges', e.id, { label });
                   }}
@@ -761,28 +784,7 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
   }
 
   // choice
-  return (
-    <>
-      <span className="section-label" style={{ color: NODE_META.choice.color }}>PLAYER CHOICE</span>
-      <TextField multiline value={node.data.text ?? ''} label="Question" placeholder="e.g. Protect or expose the Guild?" onCommit={(v) => set({ text: v })} />
-      <div className="card-box">
-        <span className="section-label">OPTIONS</span>
-        {outs.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Drag from the dot on the right to a node. Each link is one option.</span>}
-        {outs.map((e, i) => (
-          <div key={e.id} className="list-row">
-            <span className="muted" style={{ width: 18 }}>{i + 1}.</span>
-            <span className="grow">
-              <TextField value={e.label} label={'Option ' + (i + 1)} placeholder="Option text" onCommit={(v) => update('quest_edges', e.id, { label: v })} />
-            </span>
-              <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
-                <Icon name="x" size={14} />
-              </button>
-          </div>
-        ))}
-      </div>
-      {del}
-    </>
-  );
+  return <ChoicePanel node={node} edges={outs} onDelete={onDelete} />;
 }
 
 function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges: QuestEdge[]; onDelete: () => void; onOpen: (chain: string, node?: string) => void }) {
@@ -1138,6 +1140,150 @@ function LinkPanel({ edges, onRemove }: { edges: QuestEdge[]; onRemove: () => vo
         <Icon name="x" /> Cut {edges.length === 1 ? 'this link' : 'these links'}
       </button>
       <span className="muted" style={{ fontSize: 12 }}>You can also press Delete, or click the × on the link.</span>
+    </>
+  );
+}
+
+export function newOption(text: string) {
+  return { id: 'opt_' + newId().slice(0, 8), text };
+}
+
+/** Options 1, 2, 3… for a choice. Each option has its own exit dot on the node. */
+function ChoicePanel({ node, edges, onDelete }: { node: QuestNode; edges: QuestEdge[]; onDelete: () => void }) {
+  const { allNodes, defs } = useContext(QuestCtx);
+  const options = choiceOptions(node);
+  const setData = (patch: Record<string, unknown>) => update('quest_nodes', node.id, { data: { ...node.data, ...patch } });
+  const legacy = options.length === 0 ? edges : [];
+
+  const setOptions = (next: ChoiceOption[]) => setData({ options: next });
+  const rename = (id: string, text: string) => {
+    setOptions(options.map((o) => (o.id === id ? { ...o, text } : o)));
+    edges.filter((e) => e.source_handle === id).forEach((e) => update('quest_edges', e.id, { label: text }));
+  };
+  const removeOption = (id: string) => {
+    const linked = edges.filter((e) => e.source_handle === id);
+    if (linked.length && !confirm('This option is connected. Remove it and its link?')) return;
+    if (linked.length) remove('quest_edges', linked.map((e) => e.id));
+    setOptions(options.filter((o) => o.id !== id));
+  };
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...options];
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    setOptions(next);
+  };
+  /** Creates a new node to the right of the choice and connects this option to it. */
+  const createExit = (o: ChoiceOption, i: number, kind: 'dialogue' | 'quest' | 'end' | 'action') => {
+    const id = newId();
+    const x = node.x + 360;
+    const y = node.y + (i - (options.length - 1) / 2) * 170;
+    const data =
+      kind === 'dialogue'
+        ? { speaker: null, text: '' }
+        : kind === 'end'
+          ? { outcome: 'success', text: o.text }
+          : kind === 'action'
+            ? { variable: null, op: 'set', value: 'true' }
+            : {
+                code: '', name: o.text, description: '', level: '', giver: '', type: defs.list('quest_type')[0]?.id ?? null, region: null, district: null,
+                status: defs.list('quest_status')[0]?.id ?? null, assignee: null, objectives: [], required_items: [], rewards: [],
+              };
+    insert('quest_nodes', { id, chain_id: node.chain_id, kind, x: Math.round(x), y: Math.round(y), data });
+    insert('quest_edges', { id: newId(), chain_id: node.chain_id, source: node.id, target: id, kind: 'choice', label: o.text, source_handle: o.id });
+  };
+  const targetName = (id: string) => {
+    const t = allNodes.get(id);
+    if (!t) return '?';
+    if (t.kind === 'quest') return questLabel(t);
+    if (t.kind === 'dialogue') return 'Dialogue' + (defs.get(t.data.speaker) ? ': ' + defs.get(t.data.speaker)!.name : '');
+    if (t.kind === 'end') return 'End · ' + (OUTCOMES.find((x) => x.key === t.data.outcome)?.label ?? 'Success');
+    return NODE_META[t.kind]?.label ?? t.kind;
+  };
+
+  return (
+    <>
+      <span className="section-label" style={{ color: NODE_META.choice.color }}>PLAYER CHOICE</span>
+      <TextField multiline value={node.data.text ?? ''} label="Question" placeholder="e.g. Protect or expose the Guild?" onCommit={(v) => setData({ text: v })} />
+
+      <div className="card-box">
+        <span className="section-label">OPTIONS</span>
+        {options.map((o, i) => {
+          const linked = edges.filter((e) => e.source_handle === o.id);
+          return (
+            <div key={o.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 10, borderBottom: '1px solid var(--line)' }}>
+              <div className="list-row">
+                <span className="choice-num" style={{ position: 'static' }}>{i + 1}</span>
+                <span className="grow">
+                  <TextField value={o.text} label={'Option ' + (i + 1)} placeholder={'Option ' + (i + 1)} onCommit={(v) => rename(o.id, v)} />
+                </span>
+                <button type="button" className="icon-btn" aria-label={'Move option ' + (i + 1) + ' up'} disabled={i === 0} onClick={() => move(i, -1)}>
+                  <Icon name="up" size={14} />
+                </button>
+                <button type="button" className="icon-btn" aria-label={'Move option ' + (i + 1) + ' down'} disabled={i === options.length - 1} onClick={() => move(i, 1)}>
+                  <Icon name="down" size={14} />
+                </button>
+                <button type="button" className="icon-btn danger" aria-label={'Remove option ' + (i + 1)} onClick={() => removeOption(o.id)}>
+                  <Icon name="trash" size={14} />
+                </button>
+              </div>
+              {linked.length > 0 ? (
+                linked.map((e) => (
+                  <div key={e.id} className="list-row" style={{ paddingLeft: 30, fontSize: 13 }}>
+                    <span className="grow" style={{ color: 'var(--accent-text)' }}>→ {targetName(e.target)}</span>
+                    <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
+                      <Icon name="x" size={14} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="list-row" style={{ paddingLeft: 30, flexWrap: 'wrap', gap: 6 }}>
+                  <span className="muted" style={{ fontSize: 12 }}>Exit to a new</span>
+                  {(
+                    [
+                      ['dialogue', 'Dialogue'],
+                      ['quest', 'Quest'],
+                      ['action', 'Set variable'],
+                      ['end', 'End'],
+                    ] as const
+                  ).map(([k, label]) => (
+                    <button key={k} type="button" className="btn small" onClick={() => createExit(o, i, k)}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: NODE_META[k].color }} /> {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {legacy.map((e, i) => (
+          <div key={e.id} className="list-row">
+            <span className="muted" style={{ width: 18 }}>{i + 1}.</span>
+            <span className="grow">
+              <TextField value={e.label} label={'Option ' + (i + 1)} placeholder="Option text" onCommit={(v) => update('quest_edges', e.id, { label: v })} />
+            </span>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="btn ghost small"
+          style={{ alignSelf: 'flex-start' }}
+          onClick={() => {
+            // Older choices kept their options on the links: turn those into numbered options first.
+            if (!options.length && legacy.length) {
+              const converted = legacy.map((e) => newOption(e.label));
+              legacy.forEach((e, i) => update('quest_edges', e.id, { source_handle: converted[i].id }));
+              setOptions([...converted, newOption('Option ' + (converted.length + 1))]);
+            } else setOptions([...options, newOption('Option ' + (options.length + 1))]);
+          }}
+        >
+          <Icon name="plus" size={14} /> Add option
+        </button>
+        <span className="muted" style={{ fontSize: 12 }}>Each option has its own exit dot on the node. Drag from it, or use the buttons above to create the next step.</span>
+      </div>
+      <button type="button" className="btn warn" style={{ alignSelf: 'flex-start' }} onClick={onDelete}>
+        <Icon name="trash" /> Delete node
+      </button>
     </>
   );
 }

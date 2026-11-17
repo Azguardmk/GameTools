@@ -169,10 +169,14 @@ export function findProblems(nodes: QuestNode[], edges: QuestEdge[], items: Item
         if (!outs) add(n.id, 'Dead end: connect it to the next step or an End node');
         if (!ins) add(n.id, 'Nothing leads to this dialogue');
         break;
-      case 'choice':
-        if (outs < 2) add(n.id, 'A choice needs at least two options');
+      case 'choice': {
+        const opts = choiceOptions(n);
+        if (opts.length ? opts.length < 2 : outs < 2) add(n.id, 'A choice needs at least two options');
+        const used = new Set(edges.filter((e) => e.source === n.id).map((e) => e.source_handle));
+        opts.forEach((o, i) => !used.has(o.id) && add(n.id, `Option ${i + 1} (${o.text || 'no text'}) leads nowhere`));
         if (!ins) add(n.id, 'Nothing leads to this choice');
         break;
+      }
       case 'condition': {
         if (!n.data.variable && !n.data.text?.trim()) add(n.id, 'Condition is empty');
         const es = edges.filter((e) => e.source === n.id);
@@ -325,12 +329,38 @@ function DialogueNode({ data, selected }: NodeProps) {
   );
 }
 
+export type ChoiceOption = { id: string; text: string };
+export function choiceOptions(n: QuestNode | undefined): ChoiceOption[] {
+  return Array.isArray(n?.data?.options) ? (n!.data.options as ChoiceOption[]) : [];
+}
+
+/** A choice lists its options 1, 2, 3… and each option has its own exit dot. */
 function ChoiceNode({ data, selected }: NodeProps) {
   const n = data.node as QuestNode;
+  const options = choiceOptions(n);
   return (
-    <Box id={n.id} selected={selected} color="#e0805d" bg="#211714" label="PLAYER CHOICE">
+    <div className={'snode choice-node' + (selected ? ' selected' : '')}>
+      <Handle type="target" position={Position.Left} />
+      <span className="klabel" style={{ color: '#f0a083', display: 'flex', gap: 6 }}>
+        PLAYER CHOICE
+        <span style={{ flex: 1 }} />
+        <Warn id={n.id} />
+      </span>
       <span className="ktext">{n.data.text || '…'}</span>
-    </Box>
+      {options.length === 0 ? (
+        <Handle type="source" position={Position.Right} />
+      ) : (
+        <div className="choice-options">
+          {options.map((o, i) => (
+            <div key={o.id} className="choice-option">
+              <span className="choice-num">{i + 1}</span>
+              <span className="choice-text">{o.text || 'Option ' + (i + 1)}</span>
+              <Handle type="source" id={o.id} position={Position.Right} className="choice-handle" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -211,7 +211,7 @@ export function buildSeed(): Record<Table, Row[]> {
     objectives: [{ type: obj.collect, text: 'Brass Gear', count: 5 }, { type: obj.interact, text: 'Repair the clock mechanism', count: 1 }],
     required_items: [{ item: it.gear, qty: 5 }],
     rewards: [{ type: rw.xp, text: '', item: null, amount: 400 }, { type: rw.blueprint, text: '', item: it.bpRegulator, amount: 1 }, { type: rw.item, text: '', item: it.wrench, amount: 1 }] });
-  const choice = n(ch.brass, 'choice', 600, 130, { text: 'Protect or expose the Guild?' });
+  const choice = n(ch.brass, 'choice', 600, 130, { text: 'Protect or expose the Guild?', options: [{ id: 'opt_protect', text: 'Protect the Guild' }, { id: 'opt_expose', text: 'Expose the Guild' }] });
   const favor = q(ch.brass, 860, 0, { code: 'Q_NP_003a', name: "The Guild's Favor", level: '8–10', giver: 'Clockmaster Venn', giver_id: chr.venn, district: zone.guildhall,
     objectives: [{ type: obj.deliver, text: 'Sealed ledger to the Guildhall', count: 1 }] });
   const whistle = q(ch.brass, 860, 220, { code: 'Q_NP_003b', name: 'Whistleblower', level: '8–10', giver: 'Inspector Marot', giver_id: chr.marot, district: zone.guildhall, assignee: m.f2,
@@ -246,8 +246,8 @@ export function buildSeed(): Record<Table, Row[]> {
     e(ch.brass, smoke.id, gears.id, 'unlocks'),
     e(ch.brass, gears.id, vennTalk.id, 'unlocks'),
     e(ch.brass, vennTalk.id, choice.id, 'response', 'I saw it. What happens now?'),
-    e(ch.brass, choice.id, setProtect.id, 'choice', 'Protect the Guild'),
-    e(ch.brass, choice.id, setExpose.id, 'choice', 'Expose the Guild'),
+    e(ch.brass, choice.id, setProtect.id, 'choice', 'Protect the Guild', 'opt_protect'),
+    e(ch.brass, choice.id, setExpose.id, 'choice', 'Expose the Guild', 'opt_expose'),
     e(ch.brass, setProtect.id, favor.id, 'unlocks'),
     e(ch.brass, setExpose.id, whistle.id, 'unlocks'),
     e(ch.brass, favor.id, endGuild.id, 'unlocks'),

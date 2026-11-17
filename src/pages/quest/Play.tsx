@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Definition, Item, QuestData, QuestEdge, QuestNode } from '../../lib/types';
 import { Icon } from '../../components/ui';
-import { ACTION_OPS, OUTCOMES, conditionText, evaluate, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
+import { ACTION_OPS, OUTCOMES, choiceOptions, conditionText, evaluate, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
 
 /*
  * Play mode: walk through a quest chain like a player would.
@@ -136,7 +136,10 @@ export default function PlayMode(props: {
     options = next.map((e) => ({ label: e.label ? '“' + e.label + '”' : targetName(e.target), target: e.target }));
   } else if (n.kind === 'choice') {
     body = <p style={{ fontSize: 18, margin: 0 }}>{n.data.text || 'Make a choice'}</p>;
-    options = next.map((e) => ({ label: e.label || targetName(e.target), target: e.target }));
+    const opts = choiceOptions(n);
+    options = opts.length
+      ? opts.map((o, i) => ({ label: o.text || 'Option ' + (i + 1), target: next.find((e) => e.source_handle === o.id)?.target ?? null }))
+      : next.map((e) => ({ label: e.label || targetName(e.target), target: e.target }));
   } else if (n.kind === 'condition') {
     body = (
       <>
