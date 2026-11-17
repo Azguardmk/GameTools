@@ -1175,7 +1175,7 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
 
 // ---------- small helpers ----------
 
-/** Type a character's name, or pick one from the list. A new name is added to Definitions → Characters. */
+/** Type a character's name, or pick one from the list. A new name is added to Definitions → Characters / NPCs. */
 function CharacterField({ value, fallback, label, onChange }: { value: string | null; fallback?: string; label: string; onChange: (id: string | null, name: string) => void }) {
   const { defs } = useContext(QuestCtx);
   const listId = useId();
