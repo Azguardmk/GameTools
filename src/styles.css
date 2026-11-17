@@ -234,3 +234,15 @@ select option:checked { background: #a9d39a; color: #000; }
 .play-log .yes { color: #b2d69e; }
 .play-log .no { color: var(--danger); }
 .play-log .set { color: #7fd3c4; }
+
+/* Quest editor: links with a cut button, and the Move / Box select switch */
+.edge-ui { position: absolute; display: flex; align-items: center; gap: 4px; pointer-events: all; }
+.edge-label { padding: 2px 7px; border-radius: 6px; border: 1px solid; background: #1a1714; font-size: 11px; font-weight: 600; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.edge-x { width: 22px; height: 22px; display: none; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--danger-line); background: #2a1d18; color: var(--danger); cursor: pointer; padding: 0; }
+.edge-ui.selected .edge-x, .edge-ui:hover .edge-x { display: inline-flex; }
+.edge-x:hover { background: #3a2219; }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.seg button { min-height: 32px; padding: 0 12px; border: none; background: var(--panel); color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button[aria-pressed='true'] { background: #2e2a24; color: #f4efe4; }
+.react-flow__nodesselection-rect, .react-flow__selection { background: rgba(217,167,94,0.08) !important; border: 1px dashed var(--accent) !important; }

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Background,
@@ -13,9 +13,11 @@ import {
   type Edge,
   type Node,
   type NodeChange,
+  type EdgeChange,
+  SelectionMode,
 } from '@xyflow/react';
 import { insert, newId, remove, snapshot, update, useTable } from '../lib/db';
-import { download, useDefinitions, useMembers } from '../lib/hooks';
+import { SWATCHES, download, useDefinitions, useMembers } from '../lib/hooks';
 import { enumKey, type Item, type NodeKind, type QuestChain, type QuestData, type QuestEdge, type QuestNode, type Task, type TaskGroup } from '../lib/types';
 import {
   ACTION_OPS,
@@ -33,6 +35,7 @@ import {
   edgeLabel,
   findProblems,
   nodeTypes,
+  edgeTypes,
   questLabel,
   varType,
   type Ctx,
@@ -87,33 +90,57 @@ function QuestsInner() {
   );
 
   // React Flow keeps its own node list while dragging; rebuild it whenever the data changes.
+  // Keeps the current selection (one or many nodes) when the data refreshes.
   const [rfNodes, setRfNodes] = useState<Node[]>([]);
   useEffect(() => {
-    setRfNodes(chainNodes.map((n) => ({ id: n.id, type: n.kind, position: { x: n.x, y: n.y }, data: { node: n }, selected: n.id === selId })));
+    setRfNodes((prev) => {
+      const was = new Set(prev.filter((p) => p.selected).map((p) => p.id));
+      return chainNodes.map((n) => ({ id: n.id, type: n.kind, position: { x: n.x, y: n.y }, data: { node: n }, selected: was.has(n.id) || n.id === selId }));
+    });
   }, [chainNodes, selId]);
+  const selectedIds = rfNodes.filter((n) => n.selected).map((n) => n.id);
+  const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
+  const [boxMode, setBoxMode] = useState(false);
 
   const rfEdges: Edge[] = useMemo(
     () =>
       chainEdges.map((e) => ({
         id: e.id,
+        type: 'link',
         source: e.source,
         sourceHandle: e.source_handle ?? undefined,
         target: e.target,
-        label: edgeLabel(e),
-        labelBgPadding: [6, 3] as [number, number],
-        labelBgBorderRadius: 5,
-        labelStyle: { fill: edgeColor(e) },
-        style: { stroke: edgeColor(e), strokeWidth: 2.5, strokeDasharray: e.kind === 'external' ? '6 6' : undefined },
+        selected: selectedEdges.has(e.id),
+        interactionWidth: 26,
+        data: { label: edgeLabel(e), color: edgeColor(e) },
+        style: { stroke: edgeColor(e), strokeWidth: selectedEdges.has(e.id) ? 4 : 2.5, strokeDasharray: e.kind === 'external' ? '6 6' : undefined },
         markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor(e), width: 16, height: 16 },
       })),
-    [chainEdges],
+    [chainEdges, selectedEdges],
   );
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setRfNodes((ns) => applyNodeChanges(changes, ns));
-    for (const c of changes) if (c.type === 'select' && c.selected) setSel(c.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // One node selected → show it in the side panel. Several → the panel shows the group.
+  useEffect(() => {
+    if (selectedIds.length === 1 && selectedIds[0] !== selId) setSel(selectedIds[0]);
+    if (selectedIds.length > 1 && selId) setSel(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds.join(',')]);
+  const onEdgesChange = (changes: EdgeChange[]) => {
+    const next = new Set(selectedEdges);
+    let changed = false;
+    for (const c of changes) {
+      if (c.type === 'select') {
+        changed = true;
+        if (c.selected) next.add(c.id);
+        else next.delete(c.id);
+      }
+    }
+    if (changed) setSelectedEdges(next);
+  };
 
   const onConnect = (c: Connection) => {
     if (!chainId || !c.source || !c.target || c.source === c.target) return;
@@ -325,6 +352,14 @@ function QuestsInner() {
               </button>
             ))}
             <div className="spacer" />
+            <div className="seg" role="group" aria-label="Mouse mode on the canvas">
+              <button type="button" aria-pressed={!boxMode} onClick={() => setBoxMode(false)} title="Drag the canvas to move around">
+                Move
+              </button>
+              <button type="button" aria-pressed={boxMode} onClick={() => setBoxMode(true)} title="Drag a box to select several nodes">
+                Box select
+              </button>
+            </div>
             <button type="button" className="btn small" onClick={autoLayout}>
               Auto-layout
             </button>
@@ -349,7 +384,13 @@ function QuestsInner() {
                   nodes={rfNodes}
                   edges={rfEdges}
                   nodeTypes={nodeTypes}
+                  edgeTypes={edgeTypes}
                   onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  selectionOnDrag={boxMode}
+                  panOnDrag={boxMode ? [1, 2] : true}
+                  selectionMode={SelectionMode.Partial}
+                  multiSelectionKeyCode={['Control', 'Meta']}
                   onNodeDragStop={(_e, _n, moved) => moved.forEach((m) => update('quest_nodes', m.id, { x: Math.round(m.position.x), y: Math.round(m.position.y) }))}
                   onNodesDelete={(ns) => deleteNodes(ns.map((n) => n.id))}
                   onEdgesDelete={(es) => remove('quest_edges', es.map((e) => e.id))}
@@ -359,7 +400,10 @@ function QuestsInner() {
                     const label = prompt(e.kind === 'choice' ? 'Option text' : 'Player’s reply (empty = Continue)', e.label);
                     if (label !== null) update('quest_edges', e.id, { label });
                   }}
-                  onPaneClick={() => setSel(null)}
+                  onPaneClick={() => {
+                    setSel(null);
+                    setSelectedEdges(new Set());
+                  }}
                   onConnect={onConnect}
                   deleteKeyCode={['Backspace', 'Delete']}
                   fitView
@@ -380,12 +424,26 @@ function QuestsInner() {
                 <span><i style={{ borderColor: NO }} />No</span>
                 <span><i style={{ borderColor: EDGE_COLORS.external, borderTopStyle: 'dashed' }} />Quest from another chain</span>
                 <span><i style={{ borderColor: EDGE_COLORS.choice }} />Choice</span>
-                <span className="muted">Drag from a node’s right dot to another node to link them · Select and press Delete to remove · Double-click a choice or reply line to edit its text · Press Play to test the chain</span>
+                <span className="muted">Drag from a node’s right dot to another node to link them · Click a link and press its × to cut it · Hold Shift and drag (or use Box select) to select several nodes · Double-click a choice or reply line to edit its text · Press Play to test the chain</span>
               </div>
             </div>
 
             <aside className="panel side" aria-label="Details">
-              {showProblems && !selected ? (
+              {selectedIds.length > 1 ? (
+                <MultiPanel
+                  count={selectedIds.length}
+                  onDelete={() => confirm(`Delete these ${selectedIds.length} nodes and their links?`) && deleteNodes(selectedIds)}
+                  onClear={() => setRfNodes((ns) => ns.map((n) => ({ ...n, selected: false })))}
+                />
+              ) : selectedEdges.size > 0 && !selected ? (
+                <LinkPanel
+                  edges={chainEdges.filter((e) => selectedEdges.has(e.id))}
+                  onRemove={() => {
+                    remove('quest_edges', [...selectedEdges]);
+                    setSelectedEdges(new Set());
+                  }}
+                />
+              ) : showProblems && !selected ? (
                 <ProblemList problems={problems} onOpen={(n) => { setShowProblems(false); openChain(n.chain_id, n.id); }} />
               ) : selected?.kind === 'quest' ? (
                 <QuestPanel key={selected.id} node={selected} edges={chainEdges} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
@@ -596,9 +654,8 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
         <span className="section-label" style={{ color: NODE_META.dialogue.color }}>DIALOGUE</span>
         <label className="field">
           <span className="field-label">Speaker</span>
-          <DefSelect options={defs.list('character')} value={node.data.speaker} onChange={(v) => set({ speaker: v })} label="Speaker" allowEmpty />
+          <CharacterField value={node.data.speaker ?? null} label="Speaker" onChange={(v) => set({ speaker: v })} />
         </label>
-        {defs.list('character').length === 0 && help('Add characters under Definitions → Characters.')}
         <label className="field">
           <span className="field-label">What they say</span>
           <TextField multiline rows={6} value={node.data.text ?? ''} label="Dialogue line" placeholder="Write the line…" onCommit={(v) => set({ text: v })} />
@@ -612,6 +669,9 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
               <span className="grow">
                 <TextField value={e.label} label={'Reply ' + (i + 1)} placeholder="Continue" onCommit={(v) => update('quest_edges', e.id, { label: v })} />
               </span>
+              <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
+                <Icon name="x" size={14} />
+              </button>
             </div>
           ))}
         </div>
@@ -714,6 +774,9 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
             <span className="grow">
               <TextField value={e.label} label={'Option ' + (i + 1)} placeholder="Option text" onCommit={(v) => update('quest_edges', e.id, { label: v })} />
             </span>
+              <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
+                <Icon name="x" size={14} />
+              </button>
           </div>
         ))}
       </div>
@@ -772,8 +835,7 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
       <div className="grid2">
         <label className="field">
           <span className="field-label">Quest giver</span>
-          <DefSelect options={defs.list('character')} value={d.giver_id ?? null} onChange={(v) => set({ giver_id: v })} label="Quest giver" allowEmpty />
-          {!d.giver_id && d.giver && <span className="muted" style={{ fontSize: 11 }}>Was typed as “{d.giver}”</span>}
+          <CharacterField value={d.giver_id ?? null} fallback={d.giver} label="Quest giver" onChange={(v, name) => set({ giver_id: v, giver: name })} />
         </label>
         <label className="field">
           <span className="field-label">Level</span>
@@ -942,14 +1004,21 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
           {needs.map((e) => {
             const s = allNodes.get(e.source);
             const target = s?.kind === 'external' ? allNodes.get(s.data.ref) : s?.kind === 'quest' ? s : undefined;
-            return target ? (
-              <button key={e.id} type="button" className="btn ghost small" style={{ justifyContent: 'flex-start', color: '#d4b0e3', padding: 0 }} onClick={() => onOpen(target.chain_id, target.id)}>
-                {describe(s, e)}
+            return (
+              <div key={e.id} className="list-row">
+                {target ? (
+                  <button type="button" className="btn ghost small grow" style={{ justifyContent: 'flex-start', color: '#d4b0e3', padding: 0, whiteSpace: 'normal', textAlign: 'left' }} onClick={() => onOpen(target.chain_id, target.id)}>
+                    {describe(s, e)}
+                  </button>
+                ) : (
+                  <span className="grow" style={{ color: '#d4b0e3', fontSize: 13 }}>
+                    {describe(s, e)}
+                  </span>
+                )}
+                <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
+                <Icon name="x" size={14} />
               </button>
-            ) : (
-              <span key={e.id} style={{ color: '#d4b0e3', fontSize: 13 }}>
-                {describe(s, e)}
-              </span>
+              </div>
             );
           })}
           {needs.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Nothing — available from the start</span>}
@@ -957,9 +1026,14 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
         <div className="field">
           <span className="section-label">UNLOCKS</span>
           {unlocks.map((e) => (
-            <span key={e.id} style={{ color: 'var(--accent-text)', fontSize: 13 }}>
-              {describe(allNodes.get(e.target))}
-            </span>
+            <div key={e.id} className="list-row">
+              <span className="grow" style={{ color: 'var(--accent-text)', fontSize: 13 }}>
+                {describe(allNodes.get(e.target))}
+              </span>
+              <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
           ))}
           {unlocks.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Nothing yet</span>}
         </div>
@@ -973,6 +1047,97 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
           <Icon name="trash" /> Delete quest
         </button>
       </div>
+    </>
+  );
+}
+
+// ---------- small helpers ----------
+
+/** Type a character's name, or pick one from the list. A new name is added to Definitions → Characters. */
+function CharacterField({ value, fallback, label, onChange }: { value: string | null; fallback?: string; label: string; onChange: (id: string | null, name: string) => void }) {
+  const { defs } = useContext(QuestCtx);
+  const listId = useId();
+  const chars = defs.list('character');
+  const cur = defs.get(value);
+  return (
+    <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+      {cur && <span style={{ position: 'absolute', left: 10, width: 10, height: 10, borderRadius: 3, background: cur.color, pointerEvents: 'none' }} />}
+      <TextField
+        value={cur?.name ?? fallback ?? ''}
+        label={label}
+        placeholder="Type a name or pick one"
+        list={listId}
+        style={{ paddingLeft: cur ? 28 : undefined }}
+        onCommit={(raw) => {
+          const name = raw.trim();
+          if (!name) return onChange(null, '');
+          const match = chars.find((c) => c.name.toLowerCase() === name.toLowerCase());
+          if (match) return onChange(match.id, match.name);
+          const id = newId();
+          insert('definitions', {
+            id,
+            list: 'character',
+            name,
+            color: SWATCHES[chars.length % SWATCHES.length],
+            sort: chars.length ? Math.max(...chars.map((c) => c.sort)) + 1 : 0,
+            extra: { district: '', role: '' },
+          });
+          onChange(id, name);
+        }}
+      />
+      <datalist id={listId}>
+        {chars.map((c) => (
+          <option key={c.id} value={c.name} />
+        ))}
+      </datalist>
+    </span>
+  );
+}
+
+function MultiPanel({ count, onDelete, onClear }: { count: number; onDelete: () => void; onClear: () => void }) {
+  return (
+    <>
+      <span className="section-label">{count} NODES SELECTED</span>
+      <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+        Drag any of them to move them all together. Ctrl-click (Cmd-click on Mac) a node to add it to or remove it from the selection.
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn warn" onClick={onDelete}>
+          <Icon name="trash" /> Delete {count} nodes
+        </button>
+        <button type="button" className="btn" onClick={onClear}>
+          Clear selection
+        </button>
+      </div>
+    </>
+  );
+}
+
+function LinkPanel({ edges, onRemove }: { edges: QuestEdge[]; onRemove: () => void }) {
+  const { allNodes } = useContext(QuestCtx);
+  const name = (id: string) => {
+    const n = allNodes.get(id);
+    if (!n) return '?';
+    if (n.kind === 'quest') return questLabel(n);
+    if (n.kind === 'dialogue' || n.kind === 'choice' || n.kind === 'condition' || n.kind === 'start' || n.kind === 'end') return NODE_META[n.kind].label + (n.data.text ? ': ' + String(n.data.text).slice(0, 40) : '');
+    return NODE_META[n.kind]?.label ?? n.kind;
+  };
+  return (
+    <>
+      <span className="section-label">{edges.length === 1 ? 'LINK' : edges.length + ' LINKS'} SELECTED</span>
+      {edges.map((e) => (
+        <div key={e.id} className="card-box" style={{ gap: 4 }}>
+          <span style={{ fontSize: 13 }}>{name(e.source)}</span>
+          <span className="muted" style={{ fontSize: 12 }}>
+            ↓ {e.kind === 'condition' ? (e.source_handle === 'no' ? 'No' : 'Yes') : e.label || 'leads to'}
+          </span>
+          <span style={{ fontSize: 13 }}>{name(e.target)}</span>
+        </div>
+      ))}
+      <button type="button" className="btn warn" style={{ alignSelf: 'flex-start' }} onClick={onRemove}>
+        <Icon name="x" /> Cut {edges.length === 1 ? 'this link' : 'these links'}
+      </button>
+      <span className="muted" style={{ fontSize: 12 }}>You can also press Delete, or click the × on the link.</span>
     </>
   );
 }

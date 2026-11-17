@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, type EdgeProps, type NodeProps } from '@xyflow/react';
+import { remove } from '../../lib/db';
 import type { useDefinitions, useMembers } from '../../lib/hooks';
 import type { Definition, EdgeKind, Item, NodeKind, QuestChain, QuestData, QuestEdge, QuestNode } from '../../lib/types';
 import { Icon, MemberBadge } from '../../components/ui';
@@ -425,3 +426,38 @@ export function edgeLabel(e: QuestEdge) {
   if (e.kind === 'condition') return e.source_handle === 'no' ? 'No' : 'Yes';
   return e.label || undefined;
 }
+
+/** A link with its label in the middle and a × to cut it (shown when the link is selected or hovered). */
+function LinkEdge(props: EdgeProps) {
+  const [path, x, y] = getBezierPath(props);
+  const color = (props.data?.color as string) ?? '#d9a75e';
+  const label = props.data?.label as string | undefined;
+  return (
+    <>
+      <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} style={props.style} interactionWidth={props.interactionWidth} />
+      <EdgeLabelRenderer>
+        <div className={'edge-ui nodrag nopan' + (props.selected ? ' selected' : '')} style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}>
+          {label && (
+            <span className="edge-label" style={{ color, borderColor: color + '66' }}>
+              {label}
+            </span>
+          )}
+          <button
+            type="button"
+            className="edge-x"
+            aria-label="Cut this link"
+            title="Cut this link"
+            onClick={(e) => {
+              e.stopPropagation();
+              remove('quest_edges', props.id);
+            }}
+          >
+            <Icon name="x" size={12} />
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+export const edgeTypes = { link: LinkEdge };

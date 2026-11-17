@@ -47,6 +47,7 @@ export function TextField(props: {
   label?: string;
   multiline?: boolean;
   rows?: number;
+  list?: string;
   className?: string;
   style?: CSSProperties;
   type?: string;
@@ -90,6 +91,7 @@ export function TextField(props: {
       <input
         {...common}
         type={props.type ?? 'text'}
+      list={props.list}
         onChange={(e) => setV(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
