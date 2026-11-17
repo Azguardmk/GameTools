@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Definition, Item, QuestData, QuestEdge, QuestNode } from '../../lib/types';
 import { Icon } from '../../components/ui';
-import { ACTION_OPS, OUTCOMES, choiceOptions, conditionChecks, conditionIsAutomatic, conditionText, evaluateCondition, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
+import { ACTION_OPS, DONE_HANDLE, OUTCOMES, choiceMode, choiceOptions, conditionChecks, conditionIsAutomatic, conditionText, evaluateCondition, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
 
 /*
  * Play mode: walk through a quest chain like a player would.
@@ -9,7 +9,7 @@ import { ACTION_OPS, OUTCOMES, choiceOptions, conditionChecks, conditionIsAutoma
  * dialogue, choices and quests wait for you to pick what happens next.
  */
 
-type Option = { label: string; target: string | null; onPick?: () => void };
+type Option = { label: string; target: string | null; onPick?: () => void; disabled?: boolean; done?: boolean };
 type LogEntry = { text: string; tone?: 'muted' | 'yes' | 'no' | 'set' };
 
 export default function PlayMode(props: {
@@ -37,6 +37,8 @@ export default function PlayMode(props: {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [questDone, setQuestDone] = useState(false);
+  // For “Do all” choices: which options the player has finished, per node.
+  const [doneOpts, setDoneOpts] = useState<Record<string, string[]>>({});
 
   const outs = (id: string) => edges.filter((e) => e.source === id);
 
@@ -90,6 +92,7 @@ export default function PlayMode(props: {
 
   const restart = () => {
     setCompleted(new Set());
+    setDoneOpts({});
     advance(props.startId, initialVars(), [{ text: 'Started', tone: 'muted' }]);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,6 +145,40 @@ export default function PlayMode(props: {
   } else if (n.kind === 'choice') {
     body = <p style={{ fontSize: 18, margin: 0 }}>{n.data.text || 'Make a choice'}</p>;
     const opts = choiceOptions(n);
+    const mode = choiceMode(n);
+    if (mode !== 'pick') {
+      const finished = doneOpts[n.id] ?? [];
+      const nextIndex = opts.findIndex((o) => !finished.includes(o.id));
+      const choiceNode = n;
+      body = (
+        <>
+          <p style={{ fontSize: 18, margin: 0 }}>{n.data.text || 'Do all of these'}</p>
+          <span className="muted" style={{ fontSize: 13 }}>
+            {finished.length} of {opts.length} done{mode === 'order' ? ' · in order' : ''}
+          </span>
+        </>
+      );
+      if (nextIndex < 0) {
+        const exit = next.find((e) => e.source_handle === DONE_HANDLE);
+        options = [{ label: '✓ All done → ' + (exit ? targetName(exit.target) : 'not connected'), target: exit?.target ?? null }];
+      } else {
+        options = opts.map((o, i) => {
+          const isDone = finished.includes(o.id);
+          const locked = mode === 'order' && i > nextIndex;
+          const target = next.find((e) => e.source_handle === o.id)?.target ?? null;
+          return {
+            label: (o.text || 'Option ' + (i + 1)) + (isDone ? ' · done' : locked ? ' · do the steps above first' : ''),
+            target,
+            disabled: isDone || locked,
+            done: isDone,
+            onPick: () => {
+              setDoneOpts({ ...doneOpts, [choiceNode.id]: [...finished, o.id] });
+              go(target, `→ ${o.text || 'Option ' + (i + 1)} (${finished.length + 1}/${opts.length})`);
+            },
+          };
+        });
+      }
+    } else
     options = opts.length
       ? opts.map((o, i) => ({ label: o.text || 'Option ' + (i + 1), target: next.find((e) => e.source_handle === o.id)?.target ?? null }))
       : next.map((e) => ({ label: e.label || targetName(e.target), target: e.target }));
@@ -264,7 +301,8 @@ export default function PlayMode(props: {
                 <button
                   key={i}
                   type="button"
-                  className="play-option"
+                  className={'play-option' + (o.done ? ' done' : '')}
+                  disabled={o.disabled}
                   onClick={() => (o.onPick ? o.onPick() : go(o.target, n?.kind === 'choice' || n?.kind === 'dialogue' ? '→ ' + o.label : undefined))}
                 >
                   <span className="muted" style={{ minWidth: 18 }}>{i + 1}.</span> {o.label}

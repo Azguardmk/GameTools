@@ -206,8 +206,10 @@ export function findProblems(nodes: QuestNode[], edges: QuestEdge[], items: Item
         break;
       case 'choice': {
         const opts = choiceOptions(n);
-        if (opts.length ? opts.length < 2 : outs < 2) add(n.id, 'A choice needs at least two options');
+        const doAll = choiceMode(n) !== 'pick';
+        if (doAll ? opts.length < 1 : opts.length ? opts.length < 2 : outs < 2) add(n.id, doAll ? 'Add at least one option to do' : 'A choice needs at least two options');
         const used = new Set(edges.filter((e) => e.source === n.id).map((e) => e.source_handle));
+        if (doAll && !used.has(DONE_HANDLE)) add(n.id, '“All done” isn’t connected (link it to an End or the next step)');
         opts.forEach((o, i) => !used.has(o.id) && add(n.id, `Option ${i + 1} (${o.text || 'no text'}) leads nowhere`));
         if (!ins) add(n.id, 'Nothing leads to this choice');
         break;
@@ -376,15 +378,33 @@ export function choiceOptions(n: QuestNode | undefined): ChoiceOption[] {
   return Array.isArray(n?.data?.options) ? (n!.data.options as ChoiceOption[]) : [];
 }
 
+/**
+ * How a choice works:
+ *  pick  – the player picks one option (a normal decision)
+ *  all   – the player must do every option, in any order, then leaves through “All done”
+ *  order – the player must do option 1, then 2, then 3…, then leaves through “All done”
+ */
+export type ChoiceMode = 'pick' | 'all' | 'order';
+export const CHOICE_MODES: { key: ChoiceMode; label: string; short: string }[] = [
+  { key: 'pick', label: 'Pick one', short: 'PLAYER CHOICE' },
+  { key: 'all', label: 'Do all · any order', short: 'DO ALL · ANY ORDER' },
+  { key: 'order', label: 'Do all · in order', short: 'DO ALL · IN ORDER' },
+];
+export const DONE_HANDLE = 'done';
+export function choiceMode(n: QuestNode | undefined): ChoiceMode {
+  const m = n?.data?.mode;
+  return m === 'all' || m === 'order' ? m : 'pick';
+}
+
 /** A choice lists its options 1, 2, 3… and each option has its own exit dot. */
 function ChoiceNode({ data, selected }: NodeProps) {
   const n = data.node as QuestNode;
   const options = choiceOptions(n);
   return (
-    <div className={'snode choice-node' + (selected ? ' selected' : '')}>
+    <div className={'snode choice-node' + (selected ? ' selected' : '') + (choiceMode(n) !== 'pick' ? ' do-all' : '')}>
       <Handle type="target" position={Position.Left} />
       <span className="klabel" style={{ color: '#f0a083', display: 'flex', gap: 6 }}>
-        PLAYER CHOICE
+        {CHOICE_MODES.find((m) => m.key === choiceMode(n))!.short}
         <span style={{ flex: 1 }} />
         <Warn id={n.id} />
       </span>
@@ -400,6 +420,13 @@ function ChoiceNode({ data, selected }: NodeProps) {
               <Handle type="source" id={o.id} position={Position.Right} className="choice-handle" />
             </div>
           ))}
+          {choiceMode(n) !== 'pick' && (
+            <div className="choice-option choice-done">
+              <span className="choice-num">✓</span>
+              <span className="choice-text">All done</span>
+              <Handle type="source" id={DONE_HANDLE} position={Position.Right} className="choice-handle" />
+            </div>
+          )}
         </div>
       )}
     </div>
