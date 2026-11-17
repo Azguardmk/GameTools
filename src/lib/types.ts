@@ -94,7 +94,7 @@ export interface QuestChain {
   sort: number;
 }
 
-export type NodeKind = 'start' | 'end' | 'quest' | 'dialogue' | 'condition' | 'action' | 'choice' | 'external' | 'note';
+export type NodeKind = 'start' | 'end' | 'quest' | 'dialogue' | 'condition' | 'action' | 'choice' | 'external' | 'note' | 'reroute';
 
 export interface Objective {
   type: string | null;

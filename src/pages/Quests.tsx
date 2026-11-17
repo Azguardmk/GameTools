@@ -35,6 +35,9 @@ import {
   edgeLabel,
   choiceOptions,
   findProblems,
+  finalTarget,
+  originEdge,
+  realSource,
   type ChoiceOption,
   nodeTypes,
   edgeTypes,
@@ -85,10 +88,11 @@ function QuestsInner() {
       members,
       itemsById: new Map(items.map((i) => [i.id, i])),
       allNodes: new Map(allNodesRaw.map((n) => [n.id, n])),
+      allEdges,
       chains: new Map(chains.map((c) => [c.id, c])),
       problems,
     }),
-    [defs, members, items, allNodesRaw, chains, problems],
+    [defs, members, items, allNodesRaw, allEdges, chains, problems],
   );
 
   // React Flow keeps its own node list while dragging; rebuild it whenever the data changes.
@@ -118,7 +122,12 @@ function QuestsInner() {
   };
   const rfEdges: Edge[] = useMemo(
     () =>
-      chainEdges.map((e) => ({
+      chainEdges.map((e) => {
+        const nodeMap = new Map(chainNodes.map((n) => [n.id, n]));
+        const o = originEdge(e, nodeMap, chainEdges);
+        const color = edgeColor(o);
+        const isOrigin = o.id === e.id;
+        return {
         id: e.id,
         type: 'link',
         source: e.source,
@@ -126,10 +135,12 @@ function QuestsInner() {
         target: e.target,
         selected: selectedEdges.has(e.id),
         interactionWidth: 26,
-        data: { label: choiceEdgeLabel(e) ?? edgeLabel(e), color: edgeColor(e) },
-        style: { stroke: edgeColor(e), strokeWidth: selectedEdges.has(e.id) ? 4 : 2.5, strokeDasharray: e.kind === 'external' ? '6 6' : undefined },
-        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor(e), width: 16, height: 16 },
-      })),
+        data: { label: isOrigin ? choiceEdgeLabel(e) ?? edgeLabel(e) : undefined, color },
+        style: { stroke: color, strokeWidth: selectedEdges.has(e.id) ? 4 : 2.5, strokeDasharray: o.kind === 'external' ? '6 6' : undefined },
+        // Only the last piece of a rerouted link gets the arrow.
+        markerEnd: nodeMap.get(e.target)?.kind === 'reroute' ? undefined : { type: MarkerType.ArrowClosed, color, width: 16, height: 16 },
+      };
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [chainEdges, selectedEdges, chainNodes],
   );
@@ -162,6 +173,13 @@ function QuestsInner() {
     const handle = c.sourceHandle ?? null;
     if (chainEdges.some((e) => e.source === c.source && e.target === c.target && (e.source_handle ?? null) === handle)) return;
     const src = chainNodes.find((n) => n.id === c.source);
+    if (src?.kind === 'reroute') {
+      // Continue the link that runs into this reroute point.
+      const into = chainEdges.find((e) => e.target === src.id);
+      const o = into ? originEdge(into, new Map(chainNodes.map((n) => [n.id, n])), chainEdges) : undefined;
+      insert('quest_edges', { id: newId(), chain_id: chainId, source: c.source, target: c.target, kind: o?.kind ?? 'unlocks', label: '', source_handle: null });
+      return;
+    }
     const kind = edgeKindFor(src);
     let label = '';
     if (kind === 'choice') {
@@ -240,12 +258,40 @@ function QuestsInner() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  /** Splits a link with a reroute point at (x, y): the first piece keeps the link's label and type. */
+  const addReroute = async (e: QuestEdge, x: number, y: number) => {
+    const id = newId();
+    await insert('quest_nodes', { id, chain_id: e.chain_id, kind: 'reroute', x: Math.round(x - 12), y: Math.round(y - 12), data: {} });
+    await remove('quest_edges', e.id);
+    await insert('quest_edges', [
+      { id: newId(), chain_id: e.chain_id, source: e.source, target: id, kind: e.kind, label: e.label, source_handle: e.source_handle },
+      { id: newId(), chain_id: e.chain_id, source: id, target: e.target, kind: e.kind, label: '', source_handle: null },
+    ]);
+    setSelectedEdges(new Set());
+  };
+
   const deleteNodes = async (ids: string[]) => {
-    const edgeIds = snapshot<QuestEdge>('quest_edges')
+    // Deleting a reroute point joins the link back together instead of cutting it.
+    const all = snapshot<QuestEdge>('quest_edges');
+    const nodeMap = new Map(snapshot<QuestNode>('quest_nodes').map((n) => [n.id, n]));
+    const rejoin: QuestEdge[] = [];
+    for (const id of ids) {
+      if (nodeMap.get(id)?.kind !== 'reroute') continue;
+      const ins = all.filter((e) => e.target === id && !ids.includes(e.source));
+      const outsR = all.filter((e) => e.source === id);
+      if (ins.length !== 1) continue;
+      for (const o of outsR) {
+        const target = finalTarget(o.target, new Map([...nodeMap].filter(([k]) => !ids.includes(k) || nodeMap.get(k)?.kind === 'reroute')), all);
+        if (ids.includes(target)) continue;
+        rejoin.push({ ...ins[0], id: newId(), target });
+      }
+    }
+    const edgeIds = all
       .filter((e) => ids.includes(e.source) || ids.includes(e.target))
       .map((e) => e.id);
     if (edgeIds.length) await remove('quest_edges', edgeIds);
     await remove('quest_nodes', ids);
+    if (rejoin.length) await insert('quest_edges', rejoin);
     if (selId && ids.includes(selId)) setSel(null);
   };
 
@@ -299,7 +345,8 @@ function QuestsInner() {
       const prereqs = (id: string) =>
         es
           .filter((e) => e.target === id)
-          .map((e) => {
+          .map((last) => {
+            const e = originEdge(last, ctx.allNodes, allEdges);
             const s = ctx.allNodes.get(e.source);
             if (!s) return null;
             if (s.kind === 'quest') return { type: 'QuestComplete', quest: s.data.code };
@@ -330,7 +377,7 @@ function QuestsInner() {
           }),
         // The full flow, node by node, for a dialogue / quest-flow runner in Unreal.
         nodes: ns
-          .filter((n) => n.kind !== 'note')
+          .filter((n) => n.kind !== 'note' && n.kind !== 'reroute')
           .map((n) => {
             const base = { id: n.id, type: n.kind };
             switch (n.kind) {
@@ -352,9 +399,10 @@ function QuestsInner() {
                 return { ...base, text: n.data.text ?? '' };
             }
           }),
-        links: es.map((e) => ({
+        // Reroute points are only for layout: links are written from real node to real node.
+        links: es.filter((e) => ctx.allNodes.get(e.source)?.kind !== 'reroute').map((e) => ({
           from: e.source,
-          to: e.target,
+          to: finalTarget(e.target, ctx.allNodes, allEdges),
           type: e.kind,
           label: e.label,
           output: e.kind === 'condition' ? (e.source_handle === 'no' ? 'No' : 'Yes') : undefined,
@@ -469,17 +517,16 @@ function QuestsInner() {
                   selectionMode={SelectionMode.Partial}
                   multiSelectionKeyCode={['Control', 'Meta']}
                   onNodeDragStop={(_e, _n, moved) => moved.forEach((m) => update('quest_nodes', m.id, { x: Math.round(m.position.x), y: Math.round(m.position.y) }))}
-                  onNodesDelete={(ns) => deleteNodes(ns.map((n) => n.id))}
-                  onEdgesDelete={(es) => remove('quest_edges', es.map((e) => e.id))}
-                  onEdgeDoubleClick={(_e, edge) => {
+                  onDelete={({ nodes: ns, edges: es }) => {
+                    // One handler for the Delete key, so reroute points can rejoin their link before anything is removed.
+                    if (ns.length) deleteNodes(ns.map((n) => n.id));
+                    else if (es.length) remove('quest_edges', es.map((e) => e.id));
+                  }}
+                  onEdgeDoubleClick={(ev, edge) => {
                     const e = chainEdges.find((x) => x.id === edge.id);
-                    if (e?.kind !== 'choice' && e?.kind !== 'response') return;
-                    if (e.kind === 'choice' && e.source_handle) {
-                      setSel(e.source);
-                      return;
-                    }
-                    const label = prompt(e.kind === 'choice' ? 'Option text' : 'Player’s reply (empty = Continue)', e.label);
-                    if (label !== null) update('quest_edges', e.id, { label });
+                    if (!e) return;
+                    const at = rf.screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+                    addReroute(e, at.x, at.y);
                   }}
                   onPaneClick={() => {
                     setSel(null);
@@ -505,7 +552,7 @@ function QuestsInner() {
                 <span><i style={{ borderColor: NO }} />No</span>
                 <span><i style={{ borderColor: EDGE_COLORS.external, borderTopStyle: 'dashed' }} />Quest from another chain</span>
                 <span><i style={{ borderColor: EDGE_COLORS.choice }} />Choice</span>
-                <span className="muted">Drag from a node’s right dot to another node to link them · Click a link and press its × to cut it · Drag on empty space to box-select · Move around with the right or middle mouse button, or hold Space and drag · Double-click a choice or reply line to edit its text · Press Play to test the chain</span>
+                <span className="muted">Drag from a node’s right dot to another node to link them · Click a link and press its × to cut it · Drag on empty space to box-select · Move around with the right or middle mouse button, or hold Space and drag · Double-click a link to add a reroute point (drag it to bend the link) · Press Play to test the chain</span>
               </div>
             </div>
 
@@ -520,6 +567,11 @@ function QuestsInner() {
               ) : selectedEdges.size > 0 && !selected ? (
                 <LinkPanel
                   edges={chainEdges.filter((e) => selectedEdges.has(e.id))}
+                  onReroute={(e) => {
+                    const a = chainNodes.find((n) => n.id === e.source);
+                    const b = chainNodes.find((n) => n.id === e.target);
+                    if (a && b) addReroute(e, (a.x + b.x) / 2 + 100, (a.y + b.y) / 2 + 40);
+                  }}
                   onRemove={() => {
                     remove('quest_edges', [...selectedEdges]);
                     setSelectedEdges(new Set());
@@ -855,7 +907,7 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
 }
 
 function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges: QuestEdge[]; onDelete: () => void; onOpen: (chain: string, node?: string) => void }) {
-  const { defs, members, itemsById, allNodes } = useContext(QuestCtx);
+  const { defs, members, itemsById, allNodes, allEdges } = useContext(QuestCtx);
   const d = node.data as QuestData;
   const set = (patch: Partial<QuestData>) => update('quest_nodes', node.id, { data: { ...node.data, ...patch } });
   const items = [...itemsById.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -1071,17 +1123,18 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
         <div className="field">
           <span className="section-label">NEEDS</span>
           {needs.map((e) => {
-            const s = allNodes.get(e.source);
+            const s = allNodes.get(realSource(e.source, allNodes, allEdges));
+            const oe = originEdge(e, allNodes, allEdges);
             const target = s?.kind === 'external' ? allNodes.get(s.data.ref) : s?.kind === 'quest' ? s : undefined;
             return (
               <div key={e.id} className="list-row">
                 {target ? (
                   <button type="button" className="btn ghost small grow" style={{ justifyContent: 'flex-start', color: '#d4b0e3', padding: 0, whiteSpace: 'normal', textAlign: 'left' }} onClick={() => onOpen(target.chain_id, target.id)}>
-                    {describe(s, e)}
+                    {describe(s, oe)}
                   </button>
                 ) : (
                   <span className="grow" style={{ color: '#d4b0e3', fontSize: 13 }}>
-                    {describe(s, e)}
+                    {describe(s, oe)}
                   </span>
                 )}
                 <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
@@ -1097,7 +1150,7 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
           {unlocks.map((e) => (
             <div key={e.id} className="list-row">
               <span className="grow" style={{ color: 'var(--accent-text)', fontSize: 13 }}>
-                {describe(allNodes.get(e.target))}
+                {describe(allNodes.get(finalTarget(e.target, allNodes, allEdges)))}
               </span>
               <button type="button" className="icon-btn danger" aria-label="Cut this link" title="Cut this link" onClick={() => remove('quest_edges', e.id)}>
                 <Icon name="x" size={14} />
@@ -1185,9 +1238,10 @@ function MultiPanel({ count, onDuplicate, onDelete, onClear }: { count: number; 
   );
 }
 
-function LinkPanel({ edges, onRemove }: { edges: QuestEdge[]; onRemove: () => void }) {
-  const { allNodes } = useContext(QuestCtx);
-  const name = (id: string) => {
+function LinkPanel({ edges, onRemove, onReroute }: { edges: QuestEdge[]; onRemove: () => void; onReroute: (e: QuestEdge) => void }) {
+  const { allNodes, allEdges } = useContext(QuestCtx);
+  const name = (rawId: string) => {
+    const id = allNodes.get(rawId)?.kind === 'reroute' ? (rawId === edges[0]?.source ? realSource(rawId, allNodes, allEdges) : finalTarget(rawId, allNodes, allEdges)) : rawId;
     const n = allNodes.get(id);
     if (!n) return '?';
     if (n.kind === 'quest') return questLabel(n);
@@ -1206,10 +1260,17 @@ function LinkPanel({ edges, onRemove }: { edges: QuestEdge[]; onRemove: () => vo
           <span style={{ fontSize: 13 }}>{name(e.target)}</span>
         </div>
       ))}
-      <button type="button" className="btn warn" style={{ alignSelf: 'flex-start' }} onClick={onRemove}>
-        <Icon name="x" /> Cut {edges.length === 1 ? 'this link' : 'these links'}
-      </button>
-      <span className="muted" style={{ fontSize: 12 }}>You can also press Delete, or click the × on the link.</span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {edges.length === 1 && (
+          <button type="button" className="btn" onClick={() => onReroute(edges[0])}>
+            <span className="reroute-dot" /> Add reroute point
+          </button>
+        )}
+        <button type="button" className="btn warn" onClick={onRemove}>
+          <Icon name="x" /> Cut {edges.length === 1 ? 'this link' : 'these links'}
+        </button>
+      </div>
+      <span className="muted" style={{ fontSize: 12 }}>You can also press Delete, or click the × on the link. Double-click a link to drop a reroute point exactly where you click.</span>
     </>
   );
 }
@@ -1220,7 +1281,7 @@ export function newOption(text: string) {
 
 /** Options 1, 2, 3… for a choice. Each option has its own exit dot on the node. */
 function ChoicePanel({ node, edges, onDelete }: { node: QuestNode; edges: QuestEdge[]; onDelete: () => void }) {
-  const { allNodes, defs } = useContext(QuestCtx);
+  const { allNodes, allEdges, defs } = useContext(QuestCtx);
   const options = choiceOptions(node);
   const setData = (patch: Record<string, unknown>) => update('quest_nodes', node.id, { data: { ...node.data, ...patch } });
   const legacy = options.length === 0 ? edges : [];
@@ -1263,7 +1324,7 @@ function ChoicePanel({ node, edges, onDelete }: { node: QuestNode; edges: QuestE
     insert('quest_edges', { id: newId(), chain_id: node.chain_id, source: node.id, target: id, kind: 'choice', label: o.text, source_handle: o.id });
   };
   const targetName = (id: string) => {
-    const t = allNodes.get(id);
+    const t = allNodes.get(finalTarget(id, allNodes, allEdges));
     if (!t) return '?';
     if (t.kind === 'quest') return questLabel(t);
     if (t.kind === 'dialogue') return 'Dialogue' + (defs.get(t.data.speaker) ? ': ' + defs.get(t.data.speaker)!.name : '');

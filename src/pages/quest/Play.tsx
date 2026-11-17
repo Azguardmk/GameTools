@@ -76,6 +76,10 @@ export default function PlayMode(props: {
         at = null;
         continue;
       }
+      if (n.kind === 'reroute') {
+        at = outs(n.id)[0]?.target ?? null;
+        continue;
+      }
       break;
     }
     setVars(v);
@@ -104,7 +108,8 @@ export default function PlayMode(props: {
   const n = current ? byId.get(current) : undefined;
   const next = n ? outs(n.id) : [];
   const targetName = (id: string) => {
-    const t = byId.get(id);
+    let t = byId.get(id);
+    for (let i = 0; t?.kind === 'reroute' && i < 100; i++) t = byId.get(outs(t.id)[0]?.target ?? '');
     if (!t) return 'Continue';
     if (t.kind === 'quest') return 'Go to quest: ' + questLabel(t);
     if (t.kind === 'end') return 'End: ' + (OUTCOMES.find((o) => o.key === t.data.outcome)?.label ?? 'Success');

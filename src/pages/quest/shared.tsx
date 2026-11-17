@@ -53,6 +53,7 @@ export const NODE_META: Record<Exclude<NodeKind, 'external'> | 'external', { lab
   external: { label: 'Quest from another chain', color: '#c294d6', hint: 'Needs a quest from another chain' },
   end: { label: 'End', color: '#e0805d', hint: 'Where this path ends' },
   note: { label: 'Note', color: '#c4b04e', hint: 'A sticky note for the team' },
+  reroute: { label: 'Reroute', color: '#8f897d', hint: 'A bend point on a link (double-click a link to add one)' },
 };
 
 export type Ctx = {
@@ -60,6 +61,7 @@ export type Ctx = {
   members: ReturnType<typeof useMembers>;
   itemsById: Map<string, Item>;
   allNodes: Map<string, QuestNode>;
+  allEdges: QuestEdge[];
   chains: Map<string, QuestChain>;
   problems: Map<string, string[]>;
 };
@@ -191,6 +193,9 @@ export function findProblems(nodes: QuestNode[], edges: QuestEdge[], items: Item
         break;
       case 'end':
         if (!ins) add(n.id, 'Nothing leads to this End');
+        break;
+      case 'reroute':
+        if (!ins || !outs) add(n.id, 'Reroute point is not connected on both sides');
         break;
     }
   }
@@ -420,6 +425,7 @@ function NoteNode({ data, selected }: NodeProps) {
 }
 
 export const nodeTypes = {
+  reroute: RerouteNode,
   start: StartNode,
   end: EndNode,
   quest: QuestNodeView,
@@ -432,6 +438,52 @@ export const nodeTypes = {
 };
 
 /** Which link kind a new connection gets, based on the node it leaves from. */
+/** A reroute point: a draggable bend on a link, like Unreal's reroute node. Links pass straight through it. */
+function RerouteNode({ selected }: NodeProps) {
+  return (
+    <div className={'reroute-node' + (selected ? ' selected' : '')} title="Reroute point (drag to bend the link)">
+      <Handle type="target" position={Position.Left} className="reroute-handle" />
+      <Handle type="source" position={Position.Right} className="reroute-handle" />
+    </div>
+  );
+}
+
+/** Walks back through reroute points to the link that really starts this path. */
+export function originEdge(e: QuestEdge, nodes: Map<string, QuestNode>, edges: QuestEdge[]): QuestEdge {
+  let cur = e;
+  for (let i = 0; i < 100; i++) {
+    if (nodes.get(cur.source)?.kind !== 'reroute') return cur;
+    const prev = edges.find((x) => x.target === cur.source);
+    if (!prev) return cur;
+    cur = prev;
+  }
+  return cur;
+}
+
+/** Follows a link forward through reroute points to the node it really leads to. */
+export function finalTarget(targetId: string, nodes: Map<string, QuestNode>, edges: QuestEdge[]): string {
+  let id = targetId;
+  for (let i = 0; i < 100; i++) {
+    if (nodes.get(id)?.kind !== 'reroute') return id;
+    const next = edges.find((x) => x.source === id);
+    if (!next) return id;
+    id = next.target;
+  }
+  return id;
+}
+
+/** Follows a link backward through reroute points to the node it really comes from. */
+export function realSource(sourceId: string, nodes: Map<string, QuestNode>, edges: QuestEdge[]): string {
+  let id = sourceId;
+  for (let i = 0; i < 100; i++) {
+    if (nodes.get(id)?.kind !== 'reroute') return id;
+    const prev = edges.find((x) => x.target === id);
+    if (!prev) return id;
+    id = prev.source;
+  }
+  return id;
+}
+
 export function edgeKindFor(source: QuestNode | undefined): EdgeKind {
   switch (source?.kind) {
     case 'condition':
