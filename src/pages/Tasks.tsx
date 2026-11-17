@@ -89,6 +89,9 @@ export default function TasksPage() {
 
       <div className="board">
         <div className="trow head">
+          <div className="c-num" style={{ justifyContent: 'flex-end', paddingRight: 4 }}>
+            #
+          </div>
           <div className="c-done" style={{ justifyContent: 'center' }}>
             DONE
           </div>
@@ -106,6 +109,7 @@ export default function TasksPage() {
           return (
             <div key={g.id}>
               <div className="ghead">
+                <div className="ghead-inner">
                 <button type="button" className="gbtn" aria-expanded={!g.collapsed} onClick={() => update('task_groups', g.id, { collapsed: !g.collapsed })}>
                   <span style={{ display: 'inline-flex', transform: g.collapsed ? 'none' : 'rotate(90deg)', color: 'var(--muted)' }}>
                     <Icon name="chevron" size={14} />
@@ -120,14 +124,15 @@ export default function TasksPage() {
                   <Icon name="plus" size={14} /> Task
                 </button>
                 <GroupMenu group={g} taskCount={all.length} />
+                </div>
               </div>
               {!g.collapsed && (
                 <>
                   {shown.map((t) => (
-                    <TaskRow key={t.id} t={t} groupColor={g.color} priorities={priorities} statuses={statuses} members={members} />
+                    <TaskRow key={t.id} t={t} n={all.indexOf(t) + 1} groupColor={g.color} priorities={priorities} statuses={statuses} members={members} />
                   ))}
                   {shown.length === 0 && (
-                    <div className="empty" style={{ paddingLeft: 72, minWidth: 1080 }}>
+                    <div className="empty" style={{ paddingLeft: 116, minWidth: 1124 }}>
                       {all.length === 0 ? 'No tasks in this group yet.' : 'No tasks match this filter.'}
                     </div>
                   )}
@@ -137,7 +142,7 @@ export default function TasksPage() {
           );
         })}
 
-        <div style={{ padding: 12, minWidth: 1080, background: 'var(--row)' }}>
+        <div style={{ padding: 12, minWidth: 1124, background: 'var(--row)' }}>
           {addingGroup ? (
             <div style={{ position: 'sticky', left: 12, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, maxWidth: 820 }}>
               <SwatchPicker value={newGroupColor} onChange={setNewGroupColor} label="Group colour" />
@@ -171,10 +176,13 @@ export default function TasksPage() {
 
 type Members = ReturnType<typeof useMembers>;
 
-function TaskRow({ t, groupColor, priorities, statuses, members }: { t: Task; groupColor: string; priorities: Definition[]; statuses: Definition[]; members: Members }) {
+function TaskRow({ t, n, groupColor, priorities, statuses, members }: { t: Task; n: number; groupColor: string; priorities: Definition[]; statuses: Definition[]; members: Members }) {
   return (
     <div className={'trow' + (t.done ? ' done' : '')}>
-      <div className="c-done" style={{ borderLeft: '3px solid ' + groupColor }}>
+      <div className="c-num" style={{ borderLeft: '3px solid ' + groupColor }}>
+        {n}
+      </div>
+      <div className="c-done">
         <label className="check">
           <input
             type="checkbox"
