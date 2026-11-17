@@ -124,6 +124,139 @@ export function snapshot<T>(t: Table): T[] {
   return (cache[t] ?? []) as T[];
 }
 
+// ---------- undo / redo ----------
+/*
+ * Every insert / update / remove is recorded with what it replaced, so it can be undone.
+ * Writes that happen close together (or inside group()) become one undo step,
+ * e.g. deleting 20 nodes and their links is undone in one go.
+ */
+type Op =
+  | { kind: 'insert'; t: Table; rows: Row[] }
+  | { kind: 'update'; t: Table; id: string; patch: Record<string, any>; prev: Record<string, any> | null }
+  | { kind: 'remove'; t: Table; rows: Row[]; ids: string[] };
+type Step = { label: string; ops: Op[]; last: number };
+
+const undoStack: Step[] = [];
+const redoStack: Step[] = [];
+let open: Step | null = null;
+let groupDepth = 0;
+let replaying = false;
+const historyListeners = new Set<() => void>();
+const MERGE_MS = 500;
+
+const NOUN: Record<Table, [string, string]> = {
+  members: ['team member', 'team members'],
+  definitions: ['list entry', 'list entries'],
+  task_groups: ['theme group', 'theme groups'],
+  tasks: ['task', 'tasks'],
+  items: ['item', 'items'],
+  quest_chains: ['quest chain', 'quest chains'],
+  quest_nodes: ['node', 'nodes'],
+  quest_edges: ['link', 'links'],
+};
+const noun = (t: Table, n: number) => (n === 1 ? NOUN[t][0] : `${n} ${NOUN[t][1]}`);
+
+function stepLabel(ops: Op[]): string {
+  // Name the step after its most important change: chains > nodes/items/tasks > links.
+  const weight = (o: Op) => (o.t === 'quest_edges' ? 1 : o.t === 'quest_chains' || o.t === 'task_groups' ? 3 : 2) + (o.kind === 'update' ? 0 : 1);
+  const main = [...ops].sort((a, b) => weight(b) - weight(a))[0];
+  if (!main) return '';
+  const sameKind = ops.filter((o) => o.t === main.t && o.kind === main.kind);
+  const count = sameKind.reduce((n, o) => n + (o.kind === 'update' ? 1 : o.rows.length), 0);
+  if (main.kind === 'insert') return 'Add ' + noun(main.t, count);
+  if (main.kind === 'remove') return 'Delete ' + noun(main.t, count);
+  const moved = sameKind.every((o) => o.kind === 'update' && Object.keys(o.patch).every((k) => k === 'x' || k === 'y'));
+  return (moved ? 'Move ' : 'Edit ') + noun(main.t, count);
+}
+
+function emitHistory() {
+  historyListeners.forEach((fn) => fn());
+}
+
+function record(op: Op) {
+  if (replaying) return;
+  redoStack.length = 0;
+  const now = Date.now();
+  if (!open || (groupDepth === 0 && now - open.last > MERGE_MS)) {
+    open = { label: '', ops: [], last: now };
+    undoStack.push(open);
+    if (undoStack.length > 200) undoStack.shift();
+  }
+  open.ops.push(op);
+  open.last = now;
+  open.label = stepLabel(open.ops);
+  emitHistory();
+}
+
+/** Runs several writes as one undo step. */
+export async function group<T>(fn: () => Promise<T> | T): Promise<T> {
+  if (groupDepth === 0) open = null; // always start a fresh step
+  groupDepth++;
+  try {
+    return await fn();
+  } finally {
+    groupDepth--;
+    if (groupDepth === 0) open = null;
+  }
+}
+
+export function useHistory() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const fn = () => force((n) => n + 1);
+    historyListeners.add(fn);
+    return () => {
+      historyListeners.delete(fn);
+    };
+  }, []);
+  const u = undoStack[undoStack.length - 1];
+  const r = redoStack[redoStack.length - 1];
+  return { canUndo: !!u, canRedo: !!r, undoLabel: u?.label ?? '', redoLabel: r?.label ?? '', lastStep: u };
+}
+
+async function applyOps(ops: Op[], direction: 'undo' | 'redo') {
+  replaying = true;
+  try {
+    const list = direction === 'undo' ? [...ops].reverse() : ops;
+    for (const o of list) {
+      if (direction === 'undo') {
+        if (o.kind === 'insert') await rawRemove(o.t, o.rows.map((r) => r.id));
+        else if (o.kind === 'remove') await rawUpsert(o.t, o.rows);
+        else if (o.prev) await rawUpdate(o.t, o.id, o.prev);
+      } else {
+        if (o.kind === 'insert') await rawUpsert(o.t, o.rows);
+        else if (o.kind === 'remove') await rawRemove(o.t, o.ids);
+        else await rawUpdate(o.t, o.id, o.patch);
+      }
+    }
+  } finally {
+    replaying = false;
+  }
+}
+
+/** Undoes the last step. Returns its label, or null when there's nothing to undo. */
+export async function undo(): Promise<string | null> {
+  const step = undoStack.pop();
+  if (!step) return null;
+  open = null;
+  redoStack.push(step);
+  emitHistory();
+  await applyOps(step.ops, 'undo');
+  return step.label;
+}
+
+export async function redo(): Promise<string | null> {
+  const step = redoStack.pop();
+  if (!step) return null;
+  open = null;
+  undoStack.push(step);
+  emitHistory();
+  await applyOps(step.ops, 'redo');
+  return step.label;
+}
+
+const clone = <T,>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
+
 // ---------- writes ----------
 export function newId(): string {
   return crypto.randomUUID();
@@ -131,17 +264,37 @@ export function newId(): string {
 
 export async function insert<T extends Row>(t: Table, rows: T | T[]): Promise<void> {
   const list = Array.isArray(rows) ? rows : [rows];
-  cache[t] = [...(cache[t] ?? []), ...list];
+  record({ kind: 'insert', t, rows: clone(list) });
+  await rawUpsert(t, list, true);
+}
+
+export async function update(t: Table, id: string, patch: Record<string, any>): Promise<void> {
+  const before = (cache[t] ?? []).find((r) => r.id === id);
+  const prev = before ? Object.fromEntries(Object.keys(patch).map((k) => [k, clone(before[k] ?? null)])) : null;
+  record({ kind: 'update', t, id, patch: clone(patch), prev });
+  await rawUpdate(t, id, patch);
+}
+
+export async function remove(t: Table, ids: string | string[]): Promise<void> {
+  const list = Array.isArray(ids) ? ids : [ids];
+  const rows = (cache[t] ?? []).filter((r) => list.includes(r.id));
+  record({ kind: 'remove', t, rows: clone(rows), ids: list });
+  await rawRemove(t, list);
+}
+
+async function rawUpsert(t: Table, list: Row[], plainInsert = false): Promise<void> {
+  const ids = new Set(list.map((r) => r.id));
+  cache[t] = [...(cache[t] ?? []).filter((r) => !ids.has(r.id)), ...list];
   emit(t);
   if (!supabase) return lsWrite(t, cache[t]!);
-  const { error } = await supabase.from(t).insert(list);
+  const { error } = plainInsert ? await supabase.from(t).insert(list) : await supabase.from(t).upsert(list);
   if (error) {
     reportError(error);
     fetchTable(t);
   }
 }
 
-export async function update(t: Table, id: string, patch: Record<string, any>): Promise<void> {
+async function rawUpdate(t: Table, id: string, patch: Record<string, any>): Promise<void> {
   cache[t] = (cache[t] ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r));
   emit(t);
   if (!supabase) return lsWrite(t, cache[t]!);
@@ -152,8 +305,7 @@ export async function update(t: Table, id: string, patch: Record<string, any>): 
   }
 }
 
-export async function remove(t: Table, ids: string | string[]): Promise<void> {
-  const list = Array.isArray(ids) ? ids : [ids];
+async function rawRemove(t: Table, list: string[]): Promise<void> {
   cache[t] = (cache[t] ?? []).filter((r) => !list.includes(r.id));
   emit(t);
   if (!supabase) return lsWrite(t, cache[t]!);

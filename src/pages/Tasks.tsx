@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { insert, newId, remove, snapshot, update, useTable } from '../lib/db';
+import { group, insert, newId, remove, snapshot, update, useTable } from '../lib/db';
 import { useDefinitions, useMembers } from '../lib/hooks';
 import type { Definition, Task, TaskGroup } from '../lib/types';
 import { DefSelect, Icon, MemberBadge, SwatchPicker, TextField } from '../components/ui';
@@ -306,10 +306,12 @@ function AssigneePicker({ t, members }: { t: Task; members: Members }) {
   );
 }
 
-async function deleteGroup(id: string) {
-  const ids = snapshot<Task>('tasks').filter((t) => t.group_id === id).map((t) => t.id);
-  if (ids.length) await remove('tasks', ids);
-  await remove('task_groups', id);
+function deleteGroup(id: string) {
+  return group(async () => {
+    const ids = snapshot<Task>('tasks').filter((t) => t.group_id === id).map((t) => t.id);
+    if (ids.length) await remove('tasks', ids);
+    await remove('task_groups', id);
+  });
 }
 
 function GroupMenu({ group, taskCount }: { group: TaskGroup; taskCount: number }) {

@@ -17,7 +17,7 @@ import {
   type EdgeChange,
   SelectionMode,
 } from '@xyflow/react';
-import { insert, newId, remove, snapshot, update, useTable } from '../lib/db';
+import { group, insert, newId, remove, snapshot, update, useTable } from '../lib/db';
 import { SWATCHES, download, useDefinitions, useMembers } from '../lib/hooks';
 import { enumKey, type Item, type NodeKind, type QuestChain, type QuestData, type QuestEdge, type QuestNode, type Task, type TaskGroup } from '../lib/types';
 import {
@@ -201,7 +201,7 @@ function QuestsInner() {
   };
 
   /** Copies nodes (and the links between them) a little down and to the right, then selects the copies. */
-  const duplicateNodes = async (ids: string[]) => {
+  const duplicateNodes = (ids: string[]) => group(async () => {
     const src = chainNodes.filter((n) => ids.includes(n.id));
     if (!src.length) return;
     const idMap = new Map<string, string>();
@@ -243,7 +243,7 @@ function QuestsInner() {
     else setSel(null);
     await insert('quest_nodes', copies);
     if (links.length) await insert('quest_edges', links);
-  };
+  });
 
   // Ctrl+D / Cmd+D duplicates the selection (unless you're typing in a field).
   useEffect(() => {
@@ -260,7 +260,7 @@ function QuestsInner() {
   });
 
   /** Splits a link with a reroute point at (x, y): the first piece keeps the link's label and type. */
-  const addReroute = async (e: QuestEdge, x: number, y: number) => {
+  const addReroute = (e: QuestEdge, x: number, y: number) => group(async () => {
     const id = newId();
     await insert('quest_nodes', { id, chain_id: e.chain_id, kind: 'reroute', x: Math.round(x - 12), y: Math.round(y - 12), data: {} });
     await remove('quest_edges', e.id);
@@ -269,9 +269,9 @@ function QuestsInner() {
       { id: newId(), chain_id: e.chain_id, source: id, target: e.target, kind: e.kind, label: '', source_handle: null },
     ]);
     setSelectedEdges(new Set());
-  };
+  });
 
-  const deleteNodes = async (ids: string[]) => {
+  const deleteNodes = (ids: string[]) => group(async () => {
     // Deleting a reroute point joins the link back together instead of cutting it.
     const all = snapshot<QuestEdge>('quest_edges');
     const nodeMap = new Map(snapshot<QuestNode>('quest_nodes').map((n) => [n.id, n]));
@@ -294,7 +294,7 @@ function QuestsInner() {
     await remove('quest_nodes', ids);
     if (rejoin.length) await insert('quest_edges', rejoin);
     if (selId && ids.includes(selId)) setSel(null);
-  };
+  });
 
   const addNode = (kind: NodeKind, data: Record<string, unknown>) => {
     if (!chainId) return;
@@ -639,9 +639,11 @@ function ChainPanel({ chain, onDeleted }: { chain: QuestChain; onDeleted: () => 
           const ns = snapshot<QuestNode>('quest_nodes').filter((n) => n.chain_id === chain.id);
           if (!confirm(ns.length ? `Delete "${chain.name}" and its ${ns.length} nodes?` : `Delete "${chain.name}"?`)) return;
           const es = snapshot<QuestEdge>('quest_edges').filter((e) => e.chain_id === chain.id || ns.some((n) => n.id === e.source || n.id === e.target));
-          if (es.length) await remove('quest_edges', es.map((e) => e.id));
-          if (ns.length) await remove('quest_nodes', ns.map((n) => n.id));
-          await remove('quest_chains', chain.id);
+          await group(async () => {
+            if (es.length) await remove('quest_edges', es.map((e) => e.id));
+            if (ns.length) await remove('quest_nodes', ns.map((n) => n.id));
+            await remove('quest_chains', chain.id);
+          });
           onDeleted();
         }}
       >
@@ -1387,7 +1389,7 @@ function ChoicePanel({ node, edges, onDelete }: { node: QuestNode; edges: QuestE
     setOptions(next);
   };
   /** Creates a new node to the right of the choice and connects this option to it. */
-  const createExit = (o: ChoiceOption, i: number, kind: 'dialogue' | 'quest' | 'end' | 'action') => {
+  const createExit = (o: ChoiceOption, i: number, kind: 'dialogue' | 'quest' | 'end' | 'action') => group(() => {
     const id = newId();
     const x = node.x + 360;
     const y = node.y + (i - (options.length - 1) / 2) * 170;
@@ -1404,7 +1406,7 @@ function ChoicePanel({ node, edges, onDelete }: { node: QuestNode; edges: QuestE
               };
     insert('quest_nodes', { id, chain_id: node.chain_id, kind, x: Math.round(x), y: Math.round(y), data });
     insert('quest_edges', { id: newId(), chain_id: node.chain_id, source: node.id, target: id, kind: 'choice', label: o.text, source_handle: o.id });
-  };
+  });
   const targetName = (id: string) => {
     const t = allNodes.get(finalTarget(id, allNodes, allEdges));
     if (!t) return '?';

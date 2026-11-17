@@ -277,3 +277,7 @@ select option:checked { background: #a9d39a; color: #000; }
 .combo-opt.hi { background: #2e2a24; }
 .combo-opt[aria-selected='true'] { font-weight: 600; }
 .combo-opt.special { color: var(--accent-text); }
+
+/* Undo / redo */
+.history { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+.undo-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 1500; display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border-radius: 10px; background: #2a2620; border: 1px solid #4a453c; color: var(--text); box-shadow: 0 12px 32px rgba(0,0,0,0.55); font-size: 14px; }

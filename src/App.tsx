@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
-import { MODE, onDbError, supabase, useTable } from './lib/db';
+import { MODE, onDbError, redo, supabase, undo, useHistory, useTable } from './lib/db';
 import { loadStarterData, seedDemoIfEmpty } from './lib/seed';
 import type { Definition } from './lib/types';
 import { Icon } from './components/ui';
@@ -46,6 +46,7 @@ export default function App() {
           <NavLink to="/definitions">Definitions</NavLink>
         </nav>
         <div className="spacer" />
+        <HistoryButtons />
         <div className="mode">
           {MODE === 'demo' ? (
             <span className="pill demo" title="No database connected. Changes are saved only in this browser.">Demo mode · saved in this browser only</span>
@@ -147,5 +148,77 @@ function Login() {
       {state === 'sent' && <p style={{ margin: 0, color: '#b2d69e' }}>Check your inbox for the link.</p>}
       {state === 'error' && <p style={{ margin: 0, color: 'var(--danger)' }}>{msg}</p>}
     </form>
+  );
+}
+
+/** Undo / Redo buttons, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, and a short "Undo" offer after deleting. */
+function HistoryButtons() {
+  const h = useHistory();
+  const [note, setNote] = useState<string | null>(null);
+  const [offer, setOffer] = useState<string | null>(null);
+
+  const doUndo = async () => {
+    const label = await undo();
+    if (label) setNote('Undone: ' + label);
+    setOffer(null);
+  };
+  const doRedo = async () => {
+    const label = await redo();
+    if (label) setNote('Redone: ' + label);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k !== 'z' && k !== 'y') return;
+      // Text fields keep their own undo for typing.
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      e.preventDefault();
+      if (k === 'y' || e.shiftKey) doRedo();
+      else doUndo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // After something is deleted, offer a one-click Undo for a few seconds.
+  const lastLabel = h.undoLabel;
+  useEffect(() => {
+    if (lastLabel.startsWith('Delete')) {
+      setOffer(lastLabel);
+      const t = setTimeout(() => setOffer(null), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [lastLabel, h.lastStep]);
+
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 2500);
+    return () => clearTimeout(t);
+  }, [note]);
+
+  return (
+    <>
+      <div className="history" role="group" aria-label="Undo and redo">
+        <button type="button" className="icon-btn" disabled={!h.canUndo} onClick={doUndo} aria-label={h.canUndo ? 'Undo: ' + h.undoLabel : 'Nothing to undo'} title={h.canUndo ? `Undo: ${h.undoLabel} (Ctrl+Z)` : 'Nothing to undo'}>
+          <Icon name="undo" />
+        </button>
+        <button type="button" className="icon-btn" disabled={!h.canRedo} onClick={doRedo} aria-label={h.canRedo ? 'Redo: ' + h.redoLabel : 'Nothing to redo'} title={h.canRedo ? `Redo: ${h.redoLabel} (Ctrl+Shift+Z)` : 'Nothing to redo'}>
+          <Icon name="redo" />
+        </button>
+      </div>
+      {(offer || note) && (
+        <div className="undo-toast" role="status">
+          <span>{offer ? offer : note}</span>
+          {offer && (
+            <button type="button" className="btn small primary" onClick={doUndo}>
+              <Icon name="undo" size={14} /> Undo
+            </button>
+          )}
+        </div>
+      )}
+    </>
   );
 }
