@@ -102,7 +102,6 @@ function QuestsInner() {
   }, [chainNodes, selId]);
   const selectedIds = rfNodes.filter((n) => n.selected).map((n) => n.id);
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
-  const [boxMode, setBoxMode] = useState(false);
 
   const choiceEdgeLabel = (e: QuestEdge) => {
     if (e.kind !== 'choice' || !e.source_handle) return undefined;
@@ -371,14 +370,6 @@ function QuestsInner() {
               </button>
             ))}
             <div className="spacer" />
-            <div className="seg" role="group" aria-label="Mouse mode on the canvas">
-              <button type="button" aria-pressed={!boxMode} onClick={() => setBoxMode(false)} title="Drag the canvas to move around">
-                Move
-              </button>
-              <button type="button" aria-pressed={boxMode} onClick={() => setBoxMode(true)} title="Drag a box to select several nodes">
-                Box select
-              </button>
-            </div>
             <button type="button" className="btn small" onClick={autoLayout}>
               Auto-layout
             </button>
@@ -406,8 +397,9 @@ function QuestsInner() {
                   edgeTypes={edgeTypes}
                   onNodesChange={onNodesChange}
                   onEdgesChange={onEdgesChange}
-                  selectionOnDrag={boxMode}
-                  panOnDrag={boxMode ? [1, 2] : true}
+                  selectionOnDrag
+                  panOnDrag={[1, 2]}
+                  panActivationKeyCode="Space"
                   selectionMode={SelectionMode.Partial}
                   multiSelectionKeyCode={['Control', 'Meta']}
                   onNodeDragStop={(_e, _n, moved) => moved.forEach((m) => update('quest_nodes', m.id, { x: Math.round(m.position.x), y: Math.round(m.position.y) }))}
@@ -447,7 +439,7 @@ function QuestsInner() {
                 <span><i style={{ borderColor: NO }} />No</span>
                 <span><i style={{ borderColor: EDGE_COLORS.external, borderTopStyle: 'dashed' }} />Quest from another chain</span>
                 <span><i style={{ borderColor: EDGE_COLORS.choice }} />Choice</span>
-                <span className="muted">Drag from a node’s right dot to another node to link them · Click a link and press its × to cut it · Hold Shift and drag (or use Box select) to select several nodes · Double-click a choice or reply line to edit its text · Press Play to test the chain</span>
+                <span className="muted">Drag from a node’s right dot to another node to link them · Click a link and press its × to cut it · Drag on empty space to box-select · Move around with the right or middle mouse button, or hold Space and drag · Double-click a choice or reply line to edit its text · Press Play to test the chain</span>
               </div>
             </div>
 
