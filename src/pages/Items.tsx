@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions } from '../lib/hooks';
 import { enumKey, type Item, type QuestNode, type Recipe } from '../lib/types';
@@ -54,11 +54,16 @@ export default function ItemsPage() {
   const hasSource = (it: Item) => it.sources.length > 0 || !!it.recipe || (links.fromQuests.get(it.id)?.length ?? 0) > 0;
   const problems = items.filter((i) => !hasSource(i));
 
+  // In the All tab items are grouped by category, in the order of Definitions → Item categories.
+  const catIndex = (id: string | null) => {
+    const i = categories.findIndex((c) => c.id === id);
+    return i < 0 ? 9999 : i;
+  };
   const filtered = items
     .filter((i) => (cat === 'all' ? true : i.category === cat))
     .filter((i) => !query || (i.name + ' ' + i.code).toLowerCase().includes(query.toLowerCase()))
     .filter((i) => !onlyProblems || !hasSource(i))
-    .sort(byOrder);
+    .sort((a, b) => (cat === 'all' ? catIndex(a.category) - catIndex(b.category) : 0) || byOrder(a, b));
 
   const sel = (selId && byId.get(selId)) || filtered[0] || null;
 
@@ -66,7 +71,7 @@ export default function ItemsPage() {
   const move = (it: Item, dir: -1 | 1) => {
     const idx = filtered.findIndex((x) => x.id === it.id);
     const other = filtered[idx + dir];
-    if (!other) return;
+    if (!other || other.category !== it.category) return; // order is kept within a category
     const all = [...items].sort(byOrder);
     // Make every position unique first (older items may share the same number).
     const sorts = all.map((x) => x.sort ?? 0);
@@ -187,13 +192,23 @@ export default function ItemsPage() {
             const r = defs.get(it.rarity);
             const srcCount = it.sources.length + (it.recipe ? 1 : 0) + (links.fromQuests.get(it.id)?.length ?? 0);
             const useCount = (links.inRecipes.get(it.id)?.length ?? 0) + (links.neededByQuests.get(it.id)?.length ?? 0);
+            const newGroup = cat === 'all' && (i === 0 || filtered[i - 1].category !== it.category);
+            const groupCount = newGroup ? filtered.filter((x) => x.category === it.category).length : 0;
             return (
-              <div key={it.id} className={'irow' + (sel?.id === it.id ? ' sel' : '')} onClick={() => setSelId(it.id)}>
+              <Fragment key={it.id}>
+              {newGroup && (
+                <div className="icat-sep" role="presentation">
+                  <span style={{ background: c?.color ?? '#5a544a' }} />
+                  {c?.name ?? 'No category'}
+                  <em>{groupCount}</em>
+                </div>
+              )}
+              <div className={'irow' + (sel?.id === it.id ? ' sel' : '')} onClick={() => setSelId(it.id)}>
                 <span className="order-cell" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" className="icon-btn" aria-label={'Move ' + it.name + ' up'} disabled={i === 0} onClick={() => move(it, -1)}>
+                  <button type="button" className="icon-btn" aria-label={'Move ' + it.name + ' up'} disabled={i === 0 || filtered[i - 1].category !== it.category} onClick={() => move(it, -1)}>
                     <Icon name="up" size={14} />
                   </button>
-                  <button type="button" className="icon-btn" aria-label={'Move ' + it.name + ' down'} disabled={i === filtered.length - 1} onClick={() => move(it, 1)}>
+                  <button type="button" className="icon-btn" aria-label={'Move ' + it.name + ' down'} disabled={i === filtered.length - 1 || filtered[i + 1].category !== it.category} onClick={() => move(it, 1)}>
                     <Icon name="down" size={14} />
                   </button>
                 </span>
@@ -217,6 +232,7 @@ export default function ItemsPage() {
                 </span>
                 <span className="muted">{useCount ? `${useCount} place${useCount === 1 ? '' : 's'}` : '—'}</span>
               </div>
+              </Fragment>
             );
           })}
           {filtered.length === 0 && <div className="empty">No items match.</div>}
