@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { insert, newId, remove, update, useTable } from '../lib/db';
+import { group, insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions, useMembers } from '../lib/hooks';
 import { LISTS, enumKey, type Definition, type Item, type ListKey, type QuestNode, type Task } from '../lib/types';
 import { DefSelect, Icon, SwatchPicker, TextField } from '../components/ui';
@@ -122,17 +122,23 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
     setName('');
   };
 
-  const move = (i: number, dir: -1 | 1) => {
-    const a = rows[i];
-    const b = rows[i + dir];
-    if (!a || !b) return;
-    update('definitions', a.id, { sort: b.sort });
-    update('definitions', b.id, { sort: a.sort === b.sort ? a.sort + dir : a.sort });
+  /** Moves the entry at `from` to position `to` and renumbers the list (one undo step). */
+  const reorder = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= rows.length) return;
+    const next = [...rows];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    group(async () => {
+      for (let i = 0; i < next.length; i++) if (next[i].sort !== i) await update('definitions', next[i].id, { sort: i });
+    });
   };
+  const move = (i: number, dir: -1 | 1) => reorder(i, i + dir);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
 
   const [profileId, setProfileId] = useState<string | null>(null);
   const profile = profileId ? rows.find((r) => r.id === profileId) : undefined;
-  const cols = `74px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : x.options ? '130px' : '120px')).join(' ')} 110px ${meta.profile ? '96px ' : ''}48px`;
+  const cols = `48px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : x.options ? '130px' : '120px')).join(' ')} 110px ${meta.profile ? '96px ' : ''}48px`;
   /** Picking a district also fills in its region. */
   const setExtra = (r: Definition, key: string, value: string) => {
     const next: Record<string, unknown> = { ...r.extra, [key]: value };
@@ -159,7 +165,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
 
       <div style={{ border: '1px solid var(--line)', borderRadius: 12, background: 'var(--row)', overflow: 'auto' }}>
         <div className="drow head" style={{ gridTemplateColumns: cols }}>
-          <div>ORDER</div>
+          <div />
           <div>COLOR</div>
           <div>NAME</div>
           <div>UE ENUM KEY</div>
@@ -173,13 +179,57 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
         {rows.map((r, i) => {
           const used = usage.get(r.id) ?? 0;
           return (
-            <div key={r.id} className="drow" style={{ gridTemplateColumns: cols }}>
-              <span className="cell" style={{ display: 'flex' }}>
-                <button type="button" className="icon-btn" aria-label={'Move ' + r.name + ' up'} disabled={i === 0} onClick={() => move(i, -1)}>
-                  <Icon name="up" />
-                </button>
-                <button type="button" className="icon-btn" aria-label={'Move ' + r.name + ' down'} disabled={i === rows.length - 1} onClick={() => move(i, 1)}>
-                  <Icon name="down" />
+            <div
+              key={r.id}
+              className={'drow' + (dragFrom === i ? ' dragging' : '') + (dropAt === i && dragFrom !== null && dragFrom !== i ? (dragFrom < i ? ' drop-below' : ' drop-above') : '')}
+              style={{ gridTemplateColumns: cols }}
+              onDragOver={(e) => {
+                if (dragFrom === null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dropAt !== i) setDropAt(i);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragFrom !== null) reorder(dragFrom, i);
+                setDragFrom(null);
+                setDropAt(null);
+              }}
+            >
+              <span className="cell" style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="drag-handle"
+                  draggable
+                  aria-label={'Reorder ' + r.name + ' (drag, or use the arrow keys)'}
+                  title="Drag to reorder"
+                  onDragStart={(e) => {
+                    setDragFrom(i);
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', r.id);
+                    const row = (e.currentTarget as HTMLElement).closest('.drow') as HTMLElement | null;
+                    if (row) e.dataTransfer.setDragImage(row, 20, row.offsetHeight / 2);
+                  }}
+                  onDragEnd={() => {
+                    setDragFrom(null);
+                    setDropAt(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      move(i, -1);
+                    }
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      move(i, 1);
+                    }
+                  }}
+                >
+                  <svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true" fill="currentColor">
+                    <circle cx="3" cy="3" r="1.6" /><circle cx="9" cy="3" r="1.6" />
+                    <circle cx="3" cy="9" r="1.6" /><circle cx="9" cy="9" r="1.6" />
+                    <circle cx="3" cy="15" r="1.6" /><circle cx="9" cy="15" r="1.6" />
+                  </svg>
                 </button>
               </span>
               <span className="cell">
