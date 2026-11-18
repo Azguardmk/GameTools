@@ -27,6 +27,7 @@ import { group, insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions } from '../lib/hooks';
 import type { MapEdge, MapEdgeKind, MapNode, MapNodeKind, QuestChain, QuestEdge, QuestNode } from '../lib/types';
 import { DefSelect, Icon, TextField } from '../components/ui';
+import { useCanvasSize } from '../lib/canvas';
 
 /*
  * Quest map: a flow chart of the whole story.
@@ -177,6 +178,7 @@ function QuestMapInner() {
   const defs = useDefinitions();
   const navigate = useNavigate();
   const rf = useReactFlow();
+  const canvas = useCanvasSize('quest-map', 250);
 
   const chains = useMemo(() => [...chainsRaw].sort((a, b) => a.sort - b.sort), [chainsRaw]);
   const chainById = useMemo(() => new Map(chains.map((c) => [c.id, c])), [chains]);
@@ -403,6 +405,7 @@ function QuestMapInner() {
           {onMap.size} of {chains.length} chains on the map
         </span>
       </div>
+      <div ref={canvas.wrapRef} className={'canvas-area ' + canvas.className} style={canvas.style}>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <span className="muted" style={{ fontSize: 13, marginRight: 4 }}>
@@ -417,6 +420,7 @@ function QuestMapInner() {
         <button type="button" className="btn small" onClick={importLinks} title="Create links from “Quest from another chain” nodes in the quest editor">
           <Icon name="link" size={14} /> Import links from quests
         </button>
+        {canvas.maxButton}
         <button type="button" className="btn small" onClick={autoLayout}>
           Auto-layout
         </button>
@@ -470,6 +474,7 @@ function QuestMapInner() {
               />
             </ReactFlow>
           </div>
+          {canvas.grip}
           <div className="legend">
             {LINK_KINDS.map((k) => (
               <span key={k.key}>
@@ -567,6 +572,7 @@ function QuestMapInner() {
             </>
           )}
         </aside>
+      </div>
       </div>
     </div>
   );

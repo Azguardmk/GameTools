@@ -55,6 +55,7 @@ import {
 import PlayMode from './quest/Play';
 import { DefSelect, Icon, SwatchPicker, TextField } from '../components/ui';
 import { LIBRARY_MIME, Library, type LibraryDrop } from './quest/Library';
+import { useCanvasSize } from '../lib/canvas';
 
 // ---------- page ----------
 export default function QuestsPage() {
@@ -313,6 +314,7 @@ function QuestsInner() {
     setSel(id);
   };
 
+  const canvas = useCanvasSize('quests', 300);
   // ---- NPC / item library ----
   const [libOpen, setLibOpen] = useState(() => localStorage.getItem('earthlings-tools:library') !== 'closed');
   const toggleLib = () => {
@@ -547,7 +549,7 @@ function QuestsInner() {
           No quest chains yet. Press “New chain” to start.
         </div>
       ) : (
-        <>
+        <div ref={canvas.wrapRef} className={'canvas-area ' + canvas.className} style={canvas.style}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
             <span className="muted" style={{ fontSize: 13, marginRight: 4 }}>
               Add
@@ -571,6 +573,7 @@ function QuestsInner() {
               </button>
             ))}
             <div className="spacer" />
+            {canvas.maxButton}
             <button type="button" className="btn small" onClick={autoLayout}>
               Auto-layout
             </button>
@@ -659,6 +662,7 @@ function QuestsInner() {
                 </ReactFlow>
               </div>
               </div>
+              {canvas.grip}
               <div className="legend">
                 <span><i style={{ borderColor: EDGE_COLORS.unlocks }} />Unlocks</span>
                 <span><i style={{ borderColor: EDGE_COLORS.response }} />Dialogue reply</span>
@@ -710,7 +714,7 @@ function QuestsInner() {
               )}
             </aside>
           </div>
-        </>
+        </div>
       )}
       {playing && chain && (
         <PlayMode
