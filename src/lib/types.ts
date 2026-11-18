@@ -191,11 +191,12 @@ export type ListKey =
   | 'reward_type'
   | 'quest_status'
   | 'task_priority'
-  | 'task_status';
+  | 'task_status'
+  | 'faction_leader';
 
 export interface ListMeta {
   key: ListKey;
-  group: 'World' | 'Items' | 'Quests' | 'Tasks';
+  group: 'World' | 'Player factions' | 'Items' | 'Quests' | 'Tasks';
   title: string;
   enumName: string;
   description: string;
@@ -203,6 +204,9 @@ export interface ListMeta {
 }
 
 export const LISTS: ListMeta[] = [
+  { key: 'faction_leader', group: 'Player factions', title: 'Faction leaders', enumName: 'E_FactionLeader',
+    description: 'The leaders of the factions players can join. Each leader’s colour is used for their faction.',
+    extras: [{ key: 'faction', label: 'Faction', placeholder: 'Faction name' }, { key: 'hq', label: 'Headquarters', ref: 'district' }, { key: 'notes', label: 'Notes', placeholder: 'Style, perks, rivals…' }] },
   { key: 'item_category', group: 'Items', title: 'Item categories', enumName: 'E_ItemCategory',
     description: 'Every item belongs to one category. It sets the ID prefix and default stack size for new items.',
     extras: [{ key: 'prefix', label: 'ID prefix', placeholder: 'ITM_' }, { key: 'default_stack', label: 'Default stack', placeholder: '1' }] },

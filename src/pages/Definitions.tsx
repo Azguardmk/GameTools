@@ -14,7 +14,7 @@ export default function DefinitionsPage() {
 
   const groups: { name: string; items: { key: View; title: string; n: number }[] }[] = [
     { name: 'TEAM', items: [{ key: 'members', title: 'Team members', n: members.list.length }] },
-    ...(['World', 'Items', 'Quests', 'Tasks'] as const).map((g) => ({
+    ...(['World', 'Player factions', 'Items', 'Quests', 'Tasks'] as const).map((g) => ({
       name: g.toUpperCase(),
       items: LISTS.filter((l) => l.group === g).map((l) => ({ key: l.key as View, title: l.title, n: defs.list(l.key).length })),
     })),

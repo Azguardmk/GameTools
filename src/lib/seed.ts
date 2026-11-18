@@ -49,6 +49,9 @@ export function buildSeed(): Record<Table, Row[]> {
     questReward: d('source_type', 'Quest reward', '#d9a75e'),
     starting: d('source_type', 'Starting item', '#8f897d'),
   };
+  ['Sky', 'Aero', 'Grelf', 'Pepper', 'Kaya', 'Sanchez', 'Banks', 'Fyn'].forEach((name, i) =>
+    d('faction_leader', name, ['#6fb3d6', '#9fd3e6', '#8fbf74', '#e0705d', '#c294d6', '#e0a05d', '#d9c25e', '#6fd6c2'][i], { faction: '', hq: '', notes: '' }),
+  );
   const qt = {
     main: d('quest_type', 'Main', '#d9a75e'),
     side: d('quest_type', 'Side', '#6fb3d6'),
