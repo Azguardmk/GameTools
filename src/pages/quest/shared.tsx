@@ -350,9 +350,20 @@ function StartNode({ data, selected }: NodeProps) {
   );
 }
 
+/** Short text for a reward, e.g. "100 XP" or "2× Brass Gear". */
+export function rewardText(r: { type: string | null; text: string; item: string | null; amount: number }, defs: Ctx['defs'], itemsById: Ctx['itemsById']) {
+  const item = r.item ? itemsById.get(r.item)?.name : '';
+  const type = defs.get(r.type)?.name ?? '';
+  if (item) return `${r.amount > 1 ? r.amount + '× ' : ''}${item}`;
+  return [r.amount ? r.amount : '', type, r.text ? `(${r.text})` : ''].filter(Boolean).join(' ');
+}
+
 function EndNode({ data, selected }: NodeProps) {
+  const { defs, itemsById } = useContext(QuestCtx);
   const n = data.node as QuestNode;
   const o = OUTCOMES.find((x) => x.key === n.data.outcome) ?? OUTCOMES[0];
+  const sp = defs.get(n.data.speaker);
+  const rewards = Array.isArray(n.data.rewards) ? n.data.rewards : [];
   return (
     <div className={'snode end-node' + (selected ? ' selected' : '')} style={{ borderColor: o.color, background: o.color + '22' }}>
       <Handle type="target" position={Position.Left} />
@@ -362,6 +373,19 @@ function EndNode({ data, selected }: NodeProps) {
         <Warn id={n.id} />
       </span>
       {n.data.text && <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{n.data.text}</span>}
+      {n.data.dialogue && (
+        <span style={{ fontSize: 12, color: '#f1ebdf', lineHeight: 1.35 }}>
+          <b style={{ color: sp?.color ?? 'var(--muted)' }}>{sp?.name ?? 'Someone'}:</b> “{String(n.data.dialogue).slice(0, 90)}
+          {String(n.data.dialogue).length > 90 ? '…' : ''}”
+        </span>
+      )}
+      {rewards.length > 0 && (
+        <span className="end-rewards">
+          {rewards.map((r: any, i: number) => (
+            <span key={i}>+ {rewardText(r, defs, itemsById)}</span>
+          ))}
+        </span>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Definition, Item, QuestData, QuestEdge, QuestNode } from '../../lib/types';
 import { Icon } from '../../components/ui';
-import { ACTION_OPS, DONE_HANDLE, OUTCOMES, choiceMode, choiceOptions, conditionChecks, conditionIsAutomatic, conditionText, evaluateCondition, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
+import { ACTION_OPS, DONE_HANDLE, OUTCOMES, rewardText, choiceMode, choiceOptions, conditionChecks, conditionIsAutomatic, conditionText, evaluateCondition, formatValue, parseValue, questLabel, varType, type Ctx, type VarValue } from './shared';
 
 /*
  * Play mode: walk through a quest chain like a player would.
@@ -274,6 +274,19 @@ export default function PlayMode(props: {
       <>
         <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', color: o.color }}>END · {o.label.toUpperCase()}</span>
         <p style={{ fontSize: 18, margin: 0 }}>{n.data.text || 'This path ends here.'}</p>
+        {n.data.dialogue && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontWeight: 700, fontSize: 14, color: defs.get(n.data.speaker)?.color ?? 'var(--muted)' }}>{defs.get(n.data.speaker)?.name ?? 'Someone'}</span>
+            <p style={{ fontSize: 16, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{n.data.dialogue}</p>
+          </div>
+        )}
+        {Array.isArray(n.data.rewards) && n.data.rewards.length > 0 && (
+          <div className="end-rewards" style={{ fontSize: 14 }}>
+            {n.data.rewards.map((r: any, i: number) => (
+              <span key={i}>+ {rewardText(r, defs, props.itemsById)}</span>
+            ))}
+          </div>
+        )}
       </>
     );
     options = [{ label: 'Play again', target: null, onPick: restart }];

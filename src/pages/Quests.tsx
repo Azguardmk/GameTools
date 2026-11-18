@@ -409,7 +409,14 @@ function QuestsInner() {
               case 'external':
                 return { ...base, quest: ctx.allNodes.get(n.data.ref)?.data.code ?? '' };
               case 'end':
-                return { ...base, outcome: n.data.outcome ?? 'success', text: n.data.text ?? '' };
+                return {
+                  ...base,
+                  outcome: n.data.outcome ?? 'success',
+                  text: n.data.text ?? '',
+                  speaker: name(n.data.speaker),
+                  dialogue: n.data.dialogue ?? '',
+                  rewards: (Array.isArray(n.data.rewards) ? n.data.rewards : []).map((r: { type: string | null; text: string; item: string | null; amount: number }) => ({ type: name(r.type), text: r.text, item: code(r.item), amount: r.amount })),
+                };
               case 'choice':
                 return { ...base, text: n.data.text ?? '', mode: choiceMode(n), options: choiceOptions(n).map((o, i) => ({ option: i + 1, text: o.text })) };
               default:
@@ -817,6 +824,18 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
           <span className="field-label">Ending text (optional)</span>
           <TextField multiline value={node.data.text ?? ''} label="Ending text" placeholder="What happens at this ending" onCommit={(v) => set({ text: v })} />
         </label>
+        <div className="card-box">
+          <span className="section-label">DIALOGUE</span>
+          <label className="field">
+            <span className="field-label">Speaker</span>
+            <CharacterField value={node.data.speaker ?? null} label="Speaker" onChange={(v) => set({ speaker: v })} />
+          </label>
+          <label className="field">
+            <span className="field-label">What they say</span>
+            <TextField multiline rows={4} value={node.data.dialogue ?? ''} label="End dialogue" placeholder="e.g. Well done, the Guild owes you one." onCommit={(v) => set({ dialogue: v })} />
+          </label>
+        </div>
+        <RewardsEditor rewards={Array.isArray(node.data.rewards) ? node.data.rewards : []} onChange={(rewards) => set({ rewards })} />
         {del}
       </>
     );
@@ -1010,7 +1029,6 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
   const set = (patch: Partial<QuestData>) => update('quest_nodes', node.id, { data: { ...node.data, ...patch } });
   const items = [...itemsById.values()].sort((a, b) => a.name.localeCompare(b.name));
   const objTypes = defs.list('objective_type');
-  const rewardTypes = defs.list('reward_type');
 
   const describe = (n: QuestNode | undefined, e?: QuestEdge) => {
     if (!n) return '?';
@@ -1174,48 +1192,7 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
         </button>
       </div>
 
-      <div className="card-box">
-        <span className="section-label">REWARDS</span>
-        {d.rewards.map((r, i) => {
-          const patch = (p: Partial<typeof r>) => set({ rewards: d.rewards.map((x, j) => (j === i ? { ...x, ...p } : x)) });
-          return (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: '1px solid var(--line)' }}>
-              <div className="list-row">
-                <span className="grow">
-                  <DefSelect options={rewardTypes} value={r.type} onChange={(v) => patch({ type: v })} label="Reward type" />
-                </span>
-                <input className="input" type="number" aria-label="Amount" value={r.amount} style={{ width: 84 }} onChange={(e) => patch({ amount: parseInt(e.target.value) || 0 })} />
-                <button type="button" className="icon-btn danger" aria-label="Remove reward" onClick={() => set({ rewards: d.rewards.filter((_, j) => j !== i) })}>
-                  <Icon name="x" />
-                </button>
-              </div>
-              <div className="list-row">
-                <span className="select-wrap grow">
-                  <select aria-label="Reward item (optional)" value={r.item ?? ''} style={{ paddingLeft: 10 }} onChange={(e) => patch({ item: e.target.value || null })}>
-                    <option value="">No item</option>
-                    {items.map((it) => (
-                      <option key={it.id} value={it.id}>
-                        {it.name}
-                      </option>
-                    ))}
-                  </select>
-                </span>
-                <span className="grow">
-                  <TextField value={r.text} label="Reward note" placeholder="Note, e.g. faction or title" onCommit={(v) => patch({ text: v })} />
-                </span>
-              </div>
-            </div>
-          );
-        })}
-        {d.rewards.length === 0 && (
-          <div className="warn-box">
-            <Icon name="warn" /> This quest has no reward yet
-          </div>
-        )}
-        <button type="button" className="btn ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => set({ rewards: [...d.rewards, { type: rewardTypes[0]?.id ?? null, text: '', item: null, amount: 1 }] })}>
-          <Icon name="plus" size={14} /> Add reward
-        </button>
-      </div>
+      <RewardsEditor rewards={d.rewards} onChange={(rewards) => set({ rewards })} emptyWarning="This quest has no reward yet" />
 
       <div className="grid2">
         <div className="field">
@@ -1657,5 +1634,60 @@ function ChoicePanel({ node, edges, onDelete }: { node: QuestNode; edges: QuestE
         <Icon name="trash" /> Delete node
       </button>
     </>
+  );
+}
+
+type Reward = { type: string | null; text: string; item: string | null; amount: number };
+/** Rewards list (XP, currency, item, blueprint…) used by quests and End nodes. */
+function RewardsEditor({ rewards, onChange, emptyWarning }: { rewards: Reward[]; onChange: (r: Reward[]) => void; emptyWarning?: string }) {
+  const { defs, itemsById } = useContext(QuestCtx);
+  const items = [...itemsById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const rewardTypes = defs.list('reward_type');
+  return (
+    <div className="card-box">
+      <span className="section-label">REWARDS</span>
+      {rewards.map((r, i) => {
+        const patch = (p: Partial<Reward>) => onChange(rewards.map((x, j) => (j === i ? { ...x, ...p } : x)));
+        return (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: '1px solid var(--line)' }}>
+            <div className="list-row">
+              <span className="grow">
+                <DefSelect options={rewardTypes} value={r.type} onChange={(v) => patch({ type: v })} label="Reward type" />
+              </span>
+              <input className="input" type="number" aria-label="Amount" value={r.amount} style={{ width: 84 }} onChange={(e) => patch({ amount: parseInt(e.target.value) || 0 })} />
+              <button type="button" className="icon-btn danger" aria-label="Remove reward" onClick={() => onChange(rewards.filter((_, j) => j !== i))}>
+                <Icon name="x" />
+              </button>
+            </div>
+            <div className="list-row">
+              <span className="select-wrap grow">
+                <select aria-label="Reward item (optional)" value={r.item ?? ''} style={{ paddingLeft: 10 }} onChange={(e) => patch({ item: e.target.value || null })}>
+                  <option value="">No item</option>
+                  {items.map((it) => (
+                    <option key={it.id} value={it.id}>
+                      {it.name}
+                    </option>
+                  ))}
+                </select>
+              </span>
+              <span className="grow">
+                <TextField value={r.text} label="Reward note" placeholder="Note, e.g. faction or title" onCommit={(v) => patch({ text: v })} />
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      {rewards.length === 0 &&
+        (emptyWarning ? (
+          <div className="warn-box">
+            <Icon name="warn" /> {emptyWarning}
+          </div>
+        ) : (
+          <span className="muted" style={{ fontSize: 13 }}>No rewards</span>
+        ))}
+      <button type="button" className="btn ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => onChange([...rewards, { type: rewardTypes[0]?.id ?? null, text: '', item: null, amount: 1 }])}>
+        <Icon name="plus" size={14} /> Add reward
+      </button>
+    </div>
   );
 }

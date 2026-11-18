@@ -325,3 +325,6 @@ select option:checked { background: #a9d39a; color: #000; }
 .link-row { border: none; background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 6px; border-radius: 6px; text-align: left; }
 .link-row:hover { background: #1f1d19; }
 .start-type { align-self: flex-start; padding: 1px 8px; border-radius: 999px; color: #15130f; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; }
+
+.end-rewards { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.end-rewards > span { padding: 1px 7px; border-radius: 999px; background: #2a2416; border: 1px solid #5a4a2a; color: #f0d29a; font-size: 11px; font-weight: 600; }
