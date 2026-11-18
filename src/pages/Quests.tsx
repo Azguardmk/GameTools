@@ -74,11 +74,17 @@ function QuestsInner() {
   const { rows: allEdges } = useTable<QuestEdge>('quest_edges');
   const { rows: items } = useTable<Item>('items');
   const defs = useDefinitions();
+  // Chains in story order: by chapter (Definitions → Chapters order), then by their own order.
+  const chapterOrder = (id?: string | null) => {
+    const i = defs.list('chapter').findIndex((c) => c.id === id);
+    return i < 0 ? 9999 : i;
+  };
+  const chains = useMemo(() => [...chainsRaw].sort((a, b) => chapterOrder(a.chapter) - chapterOrder(b.chapter) || a.sort - b.sort), [chainsRaw, defs]); // eslint-disable-line react-hooks/exhaustive-deps
   const members = useMembers();
   const [params, setParams] = useSearchParams();
   const rf = useReactFlow();
 
-  const chains = useMemo(() => [...chainsRaw].sort((a, b) => a.sort - b.sort), [chainsRaw]);
+
   const chainId = params.get('chain') && chains.some((c) => c.id === params.get('chain')) ? params.get('chain')! : chains[0]?.id;
   const selId = params.get('node');
   const setSel = (id: string | null) =>
@@ -526,7 +532,7 @@ function QuestsInner() {
     const name = prompt('Name of the new quest chain');
     if (!name?.trim()) return;
     const id = newId();
-    insert('quest_chains', { id, name: name.trim(), color: '#6fb3d6', sort: chains.length ? Math.max(...chains.map((c) => c.sort)) + 1 : 0 });
+    insert('quest_chains', { id, name: name.trim(), color: '#6fb3d6', sort: chains.length ? Math.max(...chains.map((c) => c.sort)) + 1 : 0, chapter: chains.find((c) => c.id === chainId)?.chapter ?? null });
     openChain(id);
   };
 
@@ -546,14 +552,22 @@ function QuestsInner() {
   return (
     <QuestCtx.Provider value={ctx}>
       <div className="chain-tabs" role="navigation" aria-label="Quest chains">
-        {chains.map((c) => (
-          <button key={c.id} type="button" aria-current={c.id === chainId ? 'page' : undefined} onClick={() => openChain(c.id)}>
+        {chains.map((c, i) => (
+          <span key={c.id} style={{ display: 'contents' }}>
+          {(i === 0 || chains[i - 1].chapter !== c.chapter) && (
+            <span className="chapter-label" style={{ color: defs.get(c.chapter)?.color }} title={defs.get(c.chapter)?.extra?.summary || undefined}>
+              {defs.get(c.chapter)?.name ?? 'No chapter'}
+              {defs.get(c.chapter)?.extra?.levels && <span className="muted"> · Lv {defs.get(c.chapter)!.extra.levels}</span>}
+            </span>
+          )}
+          <button type="button" aria-current={c.id === chainId ? 'page' : undefined} onClick={() => openChain(c.id)}>
             <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} />
             {c.name}
             <span className="muted" style={{ fontSize: 12 }}>
               {allNodesRaw.filter((n) => n.chain_id === c.id && n.kind === 'quest').length}
             </span>
           </button>
+          </span>
         ))}
         <button type="button" style={{ color: 'var(--accent-text)', fontWeight: 600 }} onClick={newChain}>
           <Icon name="plus" size={14} /> New chain
@@ -787,6 +801,7 @@ function ChainPanel({ chain, onDeleted }: { chain: QuestChain; onDeleted: () => 
     <>
       <span className="section-label">QUEST CHAIN</span>
       <TextField value={chain.name} label="Chain name" onCommit={(v) => v.trim() && update('quest_chains', chain.id, { name: v.trim() })} style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700 }} />
+      <ChapterField chain={chain} />
       <div className="field">
         <span className="field-label">Colour</span>
         <SwatchPicker value={chain.color} onChange={(c) => update('quest_chains', chain.id, { color: c })} label="Chain colour" />
@@ -1827,5 +1842,18 @@ function RewardsEditor({ rewards, onChange, emptyWarning }: { rewards: Reward[];
         <Icon name="plus" size={14} /> Add reward
       </button>
     </div>
+  );
+}
+
+/** Chapter of a chain; chains are grouped by chapter in the tabs and on the Quest map. */
+function ChapterField({ chain }: { chain: QuestChain }) {
+  const { defs } = useContext(QuestCtx);
+  const chapters = defs.list('chapter');
+  return (
+    <label className="field">
+      <span className="field-label">Chapter</span>
+      <DefSelect options={chapters} value={chain.chapter ?? null} allowEmpty label="Chapter" onChange={(v) => update('quest_chains', chain.id, { chapter: v })} />
+      {chapters.length === 0 && <span className="muted" style={{ fontSize: 12 }}>Add chapters under Definitions → Chapters.</span>}
+    </label>
   );
 }

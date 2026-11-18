@@ -103,6 +103,7 @@ create table if not exists quest_edges (
 alter table quest_edges add column if not exists source_handle text;
 
 alter table quest_chains add column if not exists type text;
+alter table quest_chains add column if not exists chapter text;
 
 -- Quest map: a flow chart of whole quest chains plus logic nodes.
 -- kind: chain | start | end | and | or | split | back | note

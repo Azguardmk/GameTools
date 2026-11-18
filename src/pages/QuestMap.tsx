@@ -112,7 +112,7 @@ function lineText(l: RewardLine) {
 }
 
 // ---------- nodes ----------
-type ChainData = { name: string; typeName: string; color: string; count: number; first: string; last: string; missing: boolean; rewards?: RewardLine[] };
+type ChainData = { name: string; typeName: string; color: string; count: number; first: string; last: string; missing: boolean; rewards?: RewardLine[]; chapter?: string };
 
 function ChainMapNode({ data, selected }: NodeProps) {
   const d = data as unknown as ChainData;
@@ -121,6 +121,7 @@ function ChainMapNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Left} />
       <span className="mchain-type" style={{ background: d.color }}>
         {d.typeName ? d.typeName.toUpperCase() : 'NO TYPE'}
+        {d.chapter && <span className="mchain-chapter"> · {d.chapter}</span>}
       </span>
       <strong className="mchain-name">{d.missing ? 'Deleted chain' : d.name}</strong>
       <span className="mchain-sub">
@@ -263,7 +264,11 @@ function QuestMapInner() {
   const rf = useReactFlow();
   const canvas = useCanvasSize('quest-map', 250);
 
-  const chains = useMemo(() => [...chainsRaw].sort((a, b) => a.sort - b.sort), [chainsRaw]);
+  const chapterIdx = (id?: string | null) => {
+    const i = defs.list('chapter').findIndex((c) => c.id === id);
+    return i < 0 ? 9999 : i;
+  };
+  const chains = useMemo(() => [...chainsRaw].sort((a, b) => chapterIdx(a.chapter) - chapterIdx(b.chapter) || a.sort - b.sort), [chainsRaw, defs]); // eslint-disable-line react-hooks/exhaustive-deps
   const chainById = useMemo(() => new Map(chains.map((c) => [c.id, c])), [chains]);
   const rewardsByChain = useMemo(() => new Map(chains.map((c) => [c.id, chainRewards(c.id, qNodes, defs, itemsById)])), [chains, qNodes, defs, itemsById]);
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
@@ -287,6 +292,7 @@ function QuestMapInner() {
           const data: ChainData = {
             name: c?.name ?? '', typeName: defs.get(c?.type ?? '')?.name ?? '', color: typeColor(c), count: qs.length, first: qName(qs[0]), last: qName(qs[qs.length - 1]), missing: !c,
             rewards: showRewards && c ? rewardsByChain.get(c.id)?.lines ?? [] : undefined,
+            chapter: defs.get(c?.chapter)?.name,
           };
           return { ...base, data };
         }
@@ -628,10 +634,17 @@ function QuestMapInner() {
                 </button>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {chains.map((c) => {
+                {chains.map((c, i) => {
+                  const chapterHead = (i === 0 || chains[i - 1].chapter !== c.chapter) && (
+                    <span className="field-label" style={{ marginTop: i ? 8 : 0, color: defs.get(c.chapter)?.color }}>
+                      {defs.get(c.chapter)?.name ?? 'No chapter'}
+                    </span>
+                  );
                   const mapNode = nodes.find((n) => n.kind === 'chain' && n.chain_id === c.id);
                   return (
-                    <div key={c.id} className="list-row" style={{ gap: 8 }}>
+                    <span key={c.id} style={{ display: 'contents' }}>
+                    {chapterHead}
+                    <div className="list-row" style={{ gap: 8 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 3, background: typeColor(c), flex: 'none' }} />
                       <span className="grow" style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                         <strong style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</strong>
@@ -656,6 +669,7 @@ function QuestMapInner() {
                         </button>
                       )}
                     </div>
+                    </span>
                   );
                 })}
                 {chains.length === 0 && <span className="muted">No quest chains yet. Create them in the Quests editor.</span>}

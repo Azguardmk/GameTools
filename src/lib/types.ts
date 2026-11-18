@@ -100,6 +100,8 @@ export interface QuestChain {
   sort: number;
   /** Quest type (Main, Side…) from Definitions; colours the chain on the Quest map. */
   type?: string | null;
+  /** Chapter (definition id) the chain belongs to; chains are grouped by chapter. */
+  chapter?: string | null;
 }
 
 /** Quest map: whole chains plus flow nodes (start, end, AND, OR, pick one, go back, note). */
@@ -195,7 +197,8 @@ export type ListKey =
   | 'task_status'
   | 'faction_leader'
   | 'location'
-  | 'building';
+  | 'building'
+  | 'chapter';
 
 export interface ListMeta {
   key: ListKey;
@@ -240,6 +243,9 @@ export const LISTS: ListMeta[] = [
   { key: 'variable', group: 'Quests', title: 'Story variables', enumName: 'E_StoryVariable',
     description: 'Flags and counters the story remembers, e.g. helped_guild or rep_city_watch. Conditions check them and “Set variable” nodes change them.',
     extras: [{ key: 'type', label: 'Type', options: ['Boolean', 'Integer', 'Text'] }, { key: 'default', label: 'Starts as', placeholder: 'false / 0 / text' }] },
+  { key: 'chapter', group: 'Quests', title: 'Chapters', enumName: 'E_StoryChapter',
+    description: 'Story chapters (Prologue, Chapter 1…). Each quest chain belongs to a chapter; the order here is the story order.',
+    extras: [{ key: 'levels', label: 'Levels', placeholder: 'e.g. 1–3' }, { key: 'summary', label: 'Summary', placeholder: 'What happens in this chapter' }] },
   { key: 'quest_type', group: 'Quests', title: 'Quest types', enumName: 'E_QuestType',
     description: 'The kind of quest, shown on every quest node.', extras: [] },
   { key: 'region', group: 'World', title: 'Regions', enumName: 'E_Region',
