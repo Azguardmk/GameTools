@@ -406,3 +406,22 @@ table.balance tfoot td { font-weight: 700; border-top: 1px solid var(--line-2); 
 .qgiver-label { font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--muted); }
 .qgiver-sub { font-size: 10px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qgiver.none { display: block; border-style: dashed; border-color: #5a544a; color: var(--muted); font-size: 11px; padding: 5px 8px; }
+
+/* Character profile drawer */
+.drawer-backdrop { position: fixed; inset: 0; z-index: 1200; background: rgba(8,7,6,0.55); display: flex; justify-content: flex-end; }
+.drawer { width: min(560px, 100vw); height: 100vh; background: var(--panel); border-left: 1px solid var(--line-2); box-shadow: -18px 0 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+.drawer-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.drawer-body { flex: 1; overflow: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.profile-top { display: flex; gap: 16px; align-items: flex-start; }
+.portrait { flex: none; width: 150px; height: 190px; border-radius: 12px; border: 2px dashed; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; font-size: 12px; overflow: hidden; background: #1a1916; }
+.portrait img { width: calc(100% + 16px); height: calc(100% + 16px); margin: -8px; object-fit: cover; }
+.portrait.over { border-style: solid; background: #26221c; }
+
+/* NPC focus in the quest editor */
+.lib-entry.active { background: #24211c; }
+.react-flow__node.npc-dim { opacity: 0.28; transition: opacity 0.15s; }
+.react-flow__node.npc-hl { opacity: 1; z-index: 5 !important; }
+.react-flow__node.npc-hl > div { box-shadow: 0 0 0 3px #f0c46a, 0 0 22px rgba(240,196,106,0.55) !important; }
+.npc-card { display: flex; gap: 14px; align-items: center; padding: 12px; border: 1px solid; border-radius: 12px; background: #1a1815; }
+.npc-portrait { width: 96px; height: 120px; object-fit: cover; border-radius: 10px; border: 2px solid; flex: none; }
+.npc-text { margin: 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; color: var(--text-2); }

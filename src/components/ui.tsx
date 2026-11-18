@@ -235,7 +235,13 @@ export function ItemIcon({ name, icon, color, edge, size = 22 }: { name: string;
 }
 
 /** Round initials badge for a character / NPC. */
-export function NpcIcon({ name, color, size = 24 }: { name: string; color?: string; size?: number }) {
+export function NpcIcon({ name, color, size = 24, image }: { name: string; color?: string; size?: number; image?: string | null }) {
+  if (image)
+    return (
+      <span className="npc-icon" aria-hidden="true" style={{ width: size, height: size, border: `2px solid ${color ?? '#5a544a'}`, overflow: 'hidden' }}>
+        <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      </span>
+    );
   const w = name.split(/\s+/).filter(Boolean);
   const ini = ((w[0]?.[0] ?? '?') + (w[1]?.[0] ?? w[0]?.[1] ?? '')).toUpperCase();
   return (

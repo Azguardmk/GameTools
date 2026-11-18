@@ -38,7 +38,8 @@ export interface Definition {
   name: string;
   color: string;
   sort: number;
-  extra: Record<string, string>;
+  // List-specific fields (strings), plus a few richer ones such as a character's relations.
+  extra: Record<string, any>;
 }
 
 export interface TaskGroup {
@@ -201,6 +202,8 @@ export interface ListMeta {
   enumName: string;
   description: string;
   extras: { key: string; label: string; placeholder?: string; ref?: ListKey; options?: string[] }[];
+  /** Entries have a profile page (opened from the list). */
+  profile?: boolean;
 }
 
 export const LISTS: ListMeta[] = [
@@ -219,7 +222,8 @@ export const LISTS: ListMeta[] = [
     description: 'Ways a player can get an item.', extras: [] },
   { key: 'character', group: 'World', title: 'Characters / NPCs', enumName: 'E_Character',
     description: 'NPCs and other characters. Used as quest givers and as speakers in dialogue nodes.',
-    extras: [{ key: 'district', label: 'District', ref: 'district' }, { key: 'role', label: 'Role', placeholder: 'e.g. Clockmaker' }] },
+    extras: [{ key: 'region', label: 'Region', ref: 'region' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'role', label: 'Role', placeholder: 'e.g. Clockmaker' }],
+    profile: true },
   { key: 'variable', group: 'Quests', title: 'Story variables', enumName: 'E_StoryVariable',
     description: 'Flags and counters the story remembers, e.g. helped_guild or rep_city_watch. Conditions check them and “Set variable” nodes change them.',
     extras: [{ key: 'type', label: 'Type', options: ['Boolean', 'Integer', 'Text'] }, { key: 'default', label: 'Starts as', placeholder: 'false / 0 / text' }] },

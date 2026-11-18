@@ -56,6 +56,8 @@ import PlayMode from './quest/Play';
 import { DefSelect, Icon, SwatchPicker, TextField } from '../components/ui';
 import { LIBRARY_MIME, Library, type LibraryDrop } from './quest/Library';
 import { useCanvasSize } from '../lib/canvas';
+import { NpcPanel, npcNodes } from './quest/NpcPanel';
+import { CharacterProfile } from './CharacterProfile';
 
 // ---------- page ----------
 export default function QuestsPage() {
@@ -315,6 +317,20 @@ function QuestsInner() {
   };
 
   const canvas = useCanvasSize('quests', 300);
+  // NPC picked in the library: its info shows on the right and its nodes light up.
+  const [focusNpc, setFocusNpc] = useState<string | null>(null);
+  const [editNpc, setEditNpc] = useState<string | null>(null);
+  const npcHits = useMemo(() => new Set(focusNpc ? npcNodes(focusNpc, chainNodes).map((n) => n.id) : []), [focusNpc, chainNodes]);
+  useEffect(() => {
+    if (!focusNpc) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !editNpc && setFocusNpc(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focusNpc, editNpc]);
+  const shownNodes = useMemo(
+    () => (focusNpc ? rfNodes.map((n) => ({ ...n, className: npcHits.has(n.id) ? 'npc-hl' : 'npc-dim' })) : rfNodes),
+    [rfNodes, focusNpc, npcHits],
+  );
   // ---- NPC / item library ----
   const [libOpen, setLibOpen] = useState(() => localStorage.getItem('earthlings-tools:library') !== 'closed');
   const toggleLib = () => {
@@ -593,7 +609,21 @@ function QuestsInner() {
           <div className="split">
             <div className="main" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="quest-work">
-              <Library open={libOpen} onToggle={toggleLib} onPick={(d) => applyLibrary(d, selId)} />
+              <Library
+                open={libOpen}
+                onToggle={toggleLib}
+                activeNpc={focusNpc}
+                onPick={(d) => {
+                  if (d.kind === 'npc') {
+                    // Clicking an NPC shows who they are and highlights their nodes.
+                    setFocusNpc(focusNpc === d.id ? null : d.id);
+                    setRfNodes((ns) => ns.map((n) => ({ ...n, selected: false })));
+                    setSelectedEdges(new Set());
+                    setShowProblems(false);
+                    setSel(null);
+                  } else applyLibrary(d, selId);
+                }}
+              />
               <div
                 className={'flow-wrap' + (dropHover ? ' drop-hover' : '')}
                 onDragOver={(e) => {
@@ -621,7 +651,7 @@ function QuestsInner() {
                 {libNote && <div className="lib-note" role="status">{libNote}</div>}
                 <ReactFlow
                   key={chainId}
-                  nodes={rfNodes}
+                  nodes={shownNodes}
                   edges={rfEdges}
                   nodeTypes={nodeTypes}
                   edgeTypes={edgeTypes}
@@ -709,9 +739,25 @@ function QuestsInner() {
                 <QuestPanel key={selected.id} node={selected} edges={chainEdges} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
               ) : selected ? (
                 <OtherPanel key={selected.id} node={selected} chainId={chainId!} edges={chainEdges} onDelete={() => deleteNodes([selected.id])} onOpen={openChain} />
+              ) : focusNpc && defs.get(focusNpc) ? (
+                <NpcPanel
+                  npcId={focusNpc}
+                  chainNodes={chainNodes}
+                  onSelectNode={(id) => {
+                    pendingSelect.current = new Set([id]);
+                    setRfNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === id })));
+                    setSel(id);
+                    const n = chainNodes.find((x) => x.id === id);
+                    if (n) rf.setCenter(n.x + 120, n.y + 60, { zoom: Math.max(rf.getZoom(), 0.9), duration: 300 });
+                  }}
+                  onOpenChain={openChain}
+                  onEdit={() => setEditNpc(focusNpc)}
+                  onClose={() => setFocusNpc(null)}
+                />
               ) : (
                 <ChainPanel key={chain.id} chain={chain} onDeleted={() => setParams({})} />
               )}
+              {editNpc && defs.get(editNpc) && <CharacterProfile key={editNpc} c={defs.get(editNpc)!} onClose={() => setEditNpc(null)} onOpen={setEditNpc} />}
             </aside>
           </div>
         </div>

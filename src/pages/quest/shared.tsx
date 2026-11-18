@@ -277,7 +277,7 @@ function QuestNodeView({ data, selected }: NodeProps) {
         <span className="qname">{d.name || 'Untitled quest'}</span>
         {giver || d.giver ? (
           <span className="qgiver" style={{ borderColor: (giver?.color ?? '#5a544a') + '88' }}>
-            <NpcIcon name={giver?.name ?? d.giver} color={giver?.color} size={26} />
+            <NpcIcon name={giver?.name ?? d.giver} color={giver?.color} image={giver?.extra?.image} size={30} />
             <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <span className="qgiver-label">TALK TO</span>
               <strong style={{ color: giver?.color ?? 'var(--text)' }}>{giver?.name ?? d.giver}</strong>

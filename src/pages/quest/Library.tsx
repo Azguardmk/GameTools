@@ -13,7 +13,7 @@ import { QuestCtx } from './shared';
 export type LibraryDrop = { kind: 'npc' | 'item'; id: string };
 export const LIBRARY_MIME = 'application/x-earthlings-library';
 
-export function Library({ onPick, open, onToggle }: { onPick: (d: LibraryDrop) => void; open: boolean; onToggle: () => void }) {
+export function Library({ onPick, open, onToggle, activeNpc }: { onPick: (d: LibraryDrop) => void; open: boolean; onToggle: () => void; activeNpc?: string | null }) {
   const { defs, itemsById } = useContext(QuestCtx);
   const [tab, setTab] = useState<'npc' | 'item' | 'currency'>('npc');
   const [q, setQ] = useState('');
@@ -64,11 +64,21 @@ export function Library({ onPick, open, onToggle }: { onPick: (d: LibraryDrop) =
           ? npcs
               .filter((c) => match(c.name + ' ' + (c.extra?.role ?? '')))
               .map((c) => (
-                <button key={c.id} type="button" className="lib-entry" draggable onDragStart={drag({ kind: 'npc', id: c.id })} onClick={() => onPick({ kind: 'npc', id: c.id })} title="Drag onto the graph, or click to use it on the selected node">
-                  <NpcIcon name={c.name} color={c.color} />
+                <button
+                  key={c.id}
+                  type="button"
+                  className={'lib-entry' + (activeNpc === c.id ? ' active' : '')}
+                  style={activeNpc === c.id ? { borderColor: c.color } : undefined}
+                  aria-pressed={activeNpc === c.id}
+                  draggable
+                  onDragStart={drag({ kind: 'npc', id: c.id })}
+                  onClick={() => onPick({ kind: 'npc', id: c.id })}
+                  title="Click to see this NPC and highlight their quests · drag onto the graph to use them"
+                >
+                  <NpcIcon name={c.name} color={c.color} image={c.extra?.image} />
                   <span className="lib-text">
                     <strong>{c.name}</strong>
-                    <span>{[c.extra?.role, defs.get(c.extra?.district)?.name].filter(Boolean).join(' · ') || 'Character'}</span>
+                    <span>{[c.extra?.role, defs.get(c.extra?.district)?.name ?? defs.get(c.extra?.region)?.name].filter(Boolean).join(' · ') || 'Character'}</span>
                   </span>
                 </button>
               ))
@@ -87,7 +97,7 @@ export function Library({ onPick, open, onToggle }: { onPick: (d: LibraryDrop) =
         {tab !== 'npc' && list.length === 0 && <span className="muted" style={{ fontSize: 12 }}>{tab === 'currency' ? 'No items in a “Currency” category yet.' : 'No items yet.'}</span>}
       </div>
       <span className="muted" style={{ fontSize: 11, lineHeight: 1.45 }}>
-        Drag an NPC onto empty space for a new dialogue line, or onto a quest / dialogue / End to set who speaks. Drag an item onto a quest or End to add it as a reward.
+        Click an NPC to see their profile and light up their quests. Drag an NPC onto empty space for a new dialogue line, or onto a quest / dialogue / End to set who speaks. Drag an item onto a quest or End to add it as a reward.
       </span>
     </aside>
   );

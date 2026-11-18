@@ -3,6 +3,7 @@ import { insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions, useMembers } from '../lib/hooks';
 import { LISTS, enumKey, type Definition, type Item, type ListKey, type QuestNode, type Task } from '../lib/types';
 import { DefSelect, Icon, SwatchPicker, TextField } from '../components/ui';
+import { CharacterProfile } from './CharacterProfile';
 
 type View = ListKey | 'members';
 
@@ -27,6 +28,8 @@ export default function DefinitionsPage() {
         const extra: Record<string, string> = { ...d.extra };
         // Fields that point at another list are exported as that entry's enum key.
         l.extras.filter((x) => x.ref).forEach((x) => (extra[x.key] = extra[x.key] ? enumKey(defs.get(extra[x.key])?.name ?? '') : ''));
+        if (Array.isArray(d.extra?.relations))
+          (extra as Record<string, unknown>).relations = d.extra.relations.map((r: { other: string; kind: string; note: string }) => ({ with: enumKey(defs.get(r.other)?.name ?? ''), kind: r.kind, note: r.note }));
         return { key: enumKey(d.name), name: d.name, color: d.color, ...extra };
       });
     }
@@ -127,7 +130,18 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
     update('definitions', b.id, { sort: a.sort === b.sort ? a.sort + dir : a.sort });
   };
 
-  const cols = `74px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : x.options ? '130px' : '120px')).join(' ')} 110px 48px`;
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const profile = profileId ? rows.find((r) => r.id === profileId) : undefined;
+  const cols = `74px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : x.options ? '130px' : '120px')).join(' ')} 110px ${meta.profile ? '96px ' : ''}48px`;
+  /** Picking a district also fills in its region. */
+  const setExtra = (r: Definition, key: string, value: string) => {
+    const next: Record<string, unknown> = { ...r.extra, [key]: value };
+    if (key === 'district' && value && meta.extras.some((x) => x.key === 'region')) {
+      const region = defs.get(value)?.extra?.region;
+      if (region) next.region = region;
+    }
+    update('definitions', r.id, { extra: next });
+  };
 
   return (
     <>
@@ -153,6 +167,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
             <div key={x.key}>{x.label.toUpperCase()}</div>
           ))}
           <div>USED BY</div>
+          {meta.profile && <div />}
           <div />
         </div>
         {rows.map((r, i) => {
@@ -206,7 +221,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
                       value={r.extra?.[x.key] || null}
                       allowEmpty
                       label={x.label + ' of ' + r.name}
-                      onChange={(v) => update('definitions', r.id, { extra: { ...r.extra, [x.key]: v ?? '' } })}
+                      onChange={(v) => setExtra(r, x.key, v ?? '')}
                     />
                   ) : (
                   <TextField
@@ -222,6 +237,13 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
               <span className="cell" style={{ color: used ? 'var(--text-2)' : 'var(--faint)', paddingLeft: 14 }}>
                 {used ? `${used} use${used === 1 ? '' : 's'}` : 'Not used'}
               </span>
+              {meta.profile && (
+                <span className="cell">
+                  <button type="button" className="btn small" onClick={() => setProfileId(r.id)} aria-label={'Open profile of ' + r.name}>
+                    Profile ›
+                  </button>
+                </span>
+              )}
               <span className="cell" style={{ padding: 0 }}>
                 <button
                   type="button"
@@ -256,7 +278,9 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
       </div>
       <div className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
         The order here is the order in every dropdown. Renaming an entry updates everything that uses it. Entries in use can't be deleted.
+        {meta.profile && " Use “Profile ›” to open an NPC’s full profile."}
       </div>
+      {profile && <CharacterProfile key={profile.id} c={profile} onClose={() => setProfileId(null)} onOpen={setProfileId} />}
     </>
   );
 }
