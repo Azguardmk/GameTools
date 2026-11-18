@@ -1,4 +1,30 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+
+// ---------- full screen (shared by every page, so it stays on when you switch tabs) ----------
+let fullScreen = false;
+const fullListeners = new Set<() => void>();
+export function setFullScreen(on: boolean) {
+  fullScreen = on;
+  document.body.classList.toggle('no-scroll', on);
+  fullListeners.forEach((fn) => fn());
+}
+export function useFullScreen(): [boolean, (on: boolean) => void] {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const fn = () => force((n) => n + 1);
+    fullListeners.add(fn);
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement;
+      if (e.key === 'Escape' && fullScreen && !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) setFullScreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      fullListeners.delete(fn);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  return [fullScreen, setFullScreen];
+}
 
 /*
  * Canvas size for the graph pages:
@@ -8,17 +34,24 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 export function useCanvasSize(key: string, offset = 240) {
   const storeKey = 'earthlings-tools:canvas-h:' + key;
   const [height, setHeight] = useState<number | null>(() => Number(localStorage.getItem(storeKey)) || null);
-  const [max, setMax] = useState(false);
+  const [max, setMax] = useFullScreen();
   const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
+  // In full screen the canvas fills the window below the menu and toolbar.
+  const [fullH, setFullH] = useState<number | null>(null);
+  useLayoutEffect(() => {
     if (!max) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !(document.activeElement instanceof HTMLInputElement) && setMax(false);
-    window.addEventListener('keydown', onKey);
-    document.body.classList.add('no-scroll');
+    const fit = () => {
+      const flow = wrapRef.current?.querySelector('.flow-wrap') as HTMLElement | null;
+      if (!flow) return;
+      setFullH(Math.max(320, Math.floor(window.innerHeight - flow.getBoundingClientRect().top - 14)));
+    };
+    window.scrollTo(0, 0);
+    fit();
+    const t = setTimeout(fit, 60);
+    window.addEventListener('resize', fit);
     return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.classList.remove('no-scroll');
+      clearTimeout(t);
+      window.removeEventListener('resize', fit);
     };
   }, [max]);
 
@@ -53,7 +86,7 @@ export function useCanvasSize(key: string, offset = 240) {
   };
 
   // Default height leaves room for the page header and toolbar, so the grip stays on screen.
-  const style = (max ? undefined : { ['--canvas-h' as string]: height ? height + 'px' : `max(480px, calc(100vh - ${offset}px))` }) as CSSProperties | undefined;
+  const style = { ['--canvas-h' as string]: max ? (fullH ? fullH + 'px' : 'calc(100vh - 160px)') : height ? height + 'px' : `max(480px, calc(100vh - ${offset}px))` } as CSSProperties;
   const grip = max ? null : (
     <div
       className="canvas-grip"
@@ -72,7 +105,7 @@ export function useCanvasSize(key: string, offset = 240) {
       <span />
     </div>
   );
-  const maxButton = (
+  const maxButton = max ? null : (
     <button type="button" className="btn small" onClick={() => setMax(!max)} aria-pressed={max} title={max ? 'Leave full screen (Esc)' : 'Fill the window with the canvas'}>
       {max ? '⤡ Exit full screen' : '⤢ Full screen'}
     </button>

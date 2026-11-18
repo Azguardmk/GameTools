@@ -359,7 +359,14 @@ select option:checked { background: #a9d39a; color: #000; }
 .canvas-grip { height: 14px; margin-top: -6px; display: flex; align-items: center; justify-content: center; cursor: ns-resize; border-radius: 6px; touch-action: none; }
 .canvas-grip span { width: 64px; height: 4px; border-radius: 2px; background: #3a362f; transition: background 0.12s, width 0.12s; }
 .canvas-grip:hover span, .canvas-grip:focus-visible span { background: var(--accent); width: 96px; }
-.canvas-max { position: fixed; inset: 0; z-index: 900; padding: 12px 16px; background: var(--bg, #0f0e0d); overflow: hidden; --canvas-h: calc(100vh - 110px); }
-.canvas-max .split > .side { max-height: calc(100vh - 80px); }
 body.no-scroll { overflow: hidden; }
 .canvas-max .legend { display: none; }
+
+/* Full screen: the whole app uses the window; the menu stays at the top */
+.shell.full { max-width: none; padding: 8px 14px 0; gap: 10px; height: 100vh; overflow: hidden; }
+.shell.full .topbar { gap: 8px 18px; }
+.shell.full .topbar .nav a { min-height: 30px; }
+.shell.full .page-head { display: none; }
+.shell.full .split > .side { max-height: var(--canvas-h); position: static; }
+.shell.full .canvas-area { gap: 8px; }
+.shell.full:not(:has(.canvas-area)) { overflow: auto; padding-bottom: 20px; }

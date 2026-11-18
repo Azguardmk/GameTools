@@ -399,7 +399,7 @@ function QuestMapInner() {
 
   return (
     <div className="qmap" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+      <div className="page-head" style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 30 }}>Quest map</h1>
         <span className="muted">
           {onMap.size} of {chains.length} chains on the map

@@ -6,6 +6,7 @@ import { MODE, onDbError, redo, supabase, undo, useHistory, useTable } from './l
 import { loadStarterData, seedDemoIfEmpty } from './lib/seed';
 import type { Definition } from './lib/types';
 import { Icon } from './components/ui';
+import { useFullScreen } from './lib/canvas';
 import TasksPage from './pages/Tasks';
 import QuestsPage from './pages/Quests';
 import QuestMapPage from './pages/QuestMap';
@@ -16,6 +17,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(MODE === 'demo');
   const [error, setError] = useState<string | null>(null);
+  const [full, setFull] = useFullScreen();
 
   useEffect(() => onDbError((m) => setError(m)) as () => void, []);
 
@@ -36,7 +38,7 @@ export default function App() {
   if (MODE === 'shared' && !session) return <Login />;
 
   return (
-    <div className="shell">
+    <div className={'shell' + (full ? ' full' : '')}>
       <header className="topbar">
         <span className="brand">EARTHLINGS</span>
         <nav className="nav" aria-label="Sections">
@@ -47,6 +49,11 @@ export default function App() {
           <NavLink to="/definitions">Definitions</NavLink>
         </nav>
         <div className="spacer" />
+        {full && (
+          <button type="button" className="btn small" onClick={() => setFull(false)} title="Leave full screen (Esc)">
+            ⤡ Exit full screen
+          </button>
+        )}
         <HistoryButtons />
         <div className="mode">
           {MODE === 'demo' ? (
