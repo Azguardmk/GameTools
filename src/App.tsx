@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { MODE, onDbError, redo, supabase, undo, useHistory, useTable } from './lib/db';
@@ -64,6 +65,7 @@ export default function App() {
 
       {MODE === 'shared' && <StarterDataPrompt />}
 
+      <PageGuard>
       <Routes>
         <Route path="/" element={<Navigate to="/tasks" replace />} />
         <Route path="/tasks" element={<TasksPage />} />
@@ -73,6 +75,7 @@ export default function App() {
         <Route path="/definitions" element={<DefinitionsPage />} />
         <Route path="*" element={<Navigate to="/tasks" replace />} />
       </Routes>
+      </PageGuard>
 
       {error && (
         <div className="toast" role="alert">
@@ -221,4 +224,29 @@ function HistoryButtons() {
       )}
     </>
   );
+}
+
+/** Shows what went wrong instead of a blank page, and resets when you switch page. */
+function PageGuard({ children }: { children: ReactNode }) {
+  const loc = useLocation();
+  return <ErrorBoundary key={loc.pathname}>{children}</ErrorBoundary>;
+}
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="panel" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 720 }}>
+        <strong style={{ fontSize: 18 }}>This page hit an error</strong>
+        <span className="muted">Your data is safe. Try reloading; if it keeps happening, send this message to Filip:</span>
+        <code style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: 'var(--danger)' }}>{String(this.state.error?.message ?? this.state.error)}</code>
+        <button type="button" className="btn primary" style={{ alignSelf: 'flex-start' }} onClick={() => location.reload()}>
+          Reload
+        </button>
+      </div>
+    );
+  }
 }
