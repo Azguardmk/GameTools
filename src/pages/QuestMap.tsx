@@ -25,8 +25,8 @@ import {
 } from '@xyflow/react';
 import { group, insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions } from '../lib/hooks';
-import type { MapEdge, MapEdgeKind, MapNode, MapNodeKind, QuestChain, QuestEdge, QuestNode } from '../lib/types';
-import { DefSelect, Icon, TextField } from '../components/ui';
+import type { Item, MapEdge, MapEdgeKind, MapNode, MapNodeKind, QuestChain, QuestEdge, QuestNode } from '../lib/types';
+import { DefSelect, Icon, ItemIcon, TextField } from '../components/ui';
 import { useCanvasSize } from '../lib/canvas';
 
 /*
@@ -55,8 +55,64 @@ const FLOW_META: Record<Exclude<MapNodeKind, 'chain'>, { label: string; color: s
   note: { label: 'Note', color: '#d6c36a', hint: 'A comment for the team. Not part of the flow.' },
 };
 
+// ---------- rewards ----------
+type Reward = { type: string | null; text: string; item: string | null; amount: number };
+/** One line of a reward total, e.g. "1,250 XP" or "3× Brass Gear". */
+export type RewardLine = { key: string; label: string; amount: number; color: string; item?: Item; numeric: boolean };
+export type RewardSource = { name: string; kind: 'quest' | 'end'; lines: RewardLine[] };
+type Defs = ReturnType<typeof useDefinitions>;
+
+const isCurrencyName = (s: string) => /currenc|coin|money|gold/i.test(s);
+
+function addLine(into: Map<string, RewardLine>, r: Reward, defs: Defs, items: Map<string, Item>) {
+  const amount = Number(r.amount) || 0;
+  const item = r.item ? items.get(r.item) : undefined;
+  const type = defs.get(r.type);
+  let line: RewardLine;
+  if (item) {
+    const currency = isCurrencyName(defs.get(item.category)?.name ?? '') || isCurrencyName(type?.name ?? '');
+    line = { key: 'item:' + item.id, label: item.name, amount, color: defs.get(item.rarity)?.color ?? '#8f897d', item, numeric: currency };
+  } else {
+    const label = (type?.name ?? 'Reward') + (r.text ? ` (${r.text})` : '');
+    // XP, currency, reputation… add up; titles, cosmetics and unlocks are counted as "other" rewards.
+    const numeric = !/title|cosmetic|blueprint|unlock|item/i.test(type?.name ?? '');
+    line = { key: 'type:' + (r.type ?? '') + ':' + (r.text ?? ''), label, amount, color: type?.color ?? '#8f897d', numeric };
+  }
+  const had = into.get(line.key);
+  into.set(line.key, had ? { ...had, amount: had.amount + amount } : line);
+}
+
+/** All rewards in a chain: from its quests and from its End nodes. */
+export function chainRewards(chainId: string, qNodes: QuestNode[], defs: Defs, items: Map<string, Item>) {
+  const total = new Map<string, RewardLine>();
+  const sources: RewardSource[] = [];
+  const nodes = qNodes.filter((n) => n.chain_id === chainId && (n.kind === 'quest' || n.kind === 'end')).sort((a, b) => a.x - b.x || a.y - b.y);
+  for (const n of nodes) {
+    const list: Reward[] = Array.isArray(n.data.rewards) ? n.data.rewards : [];
+    if (!list.length) continue;
+    const own = new Map<string, RewardLine>();
+    list.forEach((r) => {
+      addLine(own, r, defs, items);
+      addLine(total, r, defs, items);
+    });
+    const name = n.kind === 'quest' ? n.data.name || n.data.code || 'Untitled quest' : 'End · ' + (n.data.outcome === 'fail' ? 'Fail' : n.data.outcome === 'neutral' ? 'Neutral' : 'Success') + (n.data.text ? ': ' + String(n.data.text).slice(0, 30) : '');
+    sources.push({ name, kind: n.kind as 'quest' | 'end', lines: sortLines([...own.values()]) });
+  }
+  const endings = nodes.filter((n) => n.kind === 'end' && Array.isArray(n.data.rewards) && n.data.rewards.length).length;
+  return { lines: sortLines([...total.values()]), sources, endings };
+}
+function sortLines(l: RewardLine[]) {
+  const xp = (x: RewardLine) => (/^xp\b|experience/i.test(x.label) ? 0 : 1);
+  return l.sort((a, b) => Number(b.numeric) - Number(a.numeric) || xp(a) - xp(b) || (a.item ? 1 : 0) - (b.item ? 1 : 0) || b.amount - a.amount);
+}
+const fmt = (n: number) => n.toLocaleString('en-US');
+function lineText(l: RewardLine) {
+  if (l.numeric) return `${fmt(l.amount)} ${l.label}`;
+  return l.amount > 1 ? `${l.amount}× ${l.label}` : l.label;
+}
+
 // ---------- nodes ----------
-type ChainData = { name: string; typeName: string; color: string; count: number; first: string; last: string; missing: boolean };
+type ChainData = { name: string; typeName: string; color: string; count: number; first: string; last: string; missing: boolean; rewards?: RewardLine[] };
 
 function ChainMapNode({ data, selected }: NodeProps) {
   const d = data as unknown as ChainData;
@@ -71,6 +127,26 @@ function ChainMapNode({ data, selected }: NodeProps) {
         {d.count} quest{d.count === 1 ? '' : 's'}
         {d.first && ` · ${d.first}${d.last && d.last !== d.first ? ' → ' + d.last : ''}`}
       </span>
+      {d.rewards && (
+        <span className="mchain-rewards">
+          {d.rewards.length === 0 ? (
+            <span className="muted">No rewards</span>
+          ) : (
+            <>
+              {d.rewards.filter((l) => l.numeric).slice(0, 3).map((l) => (
+                <span key={l.key} style={{ color: l.color }}>
+                  {fmt(l.amount)} {l.label}
+                </span>
+              ))}
+              {d.rewards.some((l) => !l.numeric) && (
+                <span title={d.rewards.filter((l) => !l.numeric).map(lineText).join(', ')}>
+                  +{d.rewards.filter((l) => !l.numeric).length} item{d.rewards.filter((l) => !l.numeric).length === 1 ? '' : 's'} / other
+                </span>
+              )}
+            </>
+          )}
+        </span>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   );
@@ -176,12 +252,20 @@ function QuestMapInner() {
   const { rows: nodes } = useTable<MapNode>('map_nodes');
   const { rows: edges } = useTable<MapEdge>('map_edges');
   const defs = useDefinitions();
+  const { rows: itemRows } = useTable<Item>('items');
+  const itemsById = useMemo(() => new Map(itemRows.map((i) => [i.id, i])), [itemRows]);
+  const [showRewards, setShowRewards] = useState(() => localStorage.getItem('earthlings-tools:map-rewards') !== 'off');
+  const toggleRewards = () => {
+    localStorage.setItem('earthlings-tools:map-rewards', showRewards ? 'off' : 'on');
+    setShowRewards(!showRewards);
+  };
   const navigate = useNavigate();
   const rf = useReactFlow();
   const canvas = useCanvasSize('quest-map', 250);
 
   const chains = useMemo(() => [...chainsRaw].sort((a, b) => a.sort - b.sort), [chainsRaw]);
   const chainById = useMemo(() => new Map(chains.map((c) => [c.id, c])), [chains]);
+  const rewardsByChain = useMemo(() => new Map(chains.map((c) => [c.id, chainRewards(c.id, qNodes, defs, itemsById)])), [chains, qNodes, defs, itemsById]);
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const typeColor = (c?: QuestChain) => defs.get(c?.type ?? '')?.color ?? c?.color ?? '#5a544a';
   const questsOf = (chainId: string) => qNodes.filter((n) => n.chain_id === chainId && n.kind === 'quest').sort((a, b) => a.x - b.x || a.y - b.y);
@@ -200,7 +284,10 @@ function QuestMapInner() {
           const c = chainById.get(n.chain_id ?? '');
           const qs = c ? questsOf(c.id) : [];
           const qName = (q?: QuestNode) => (q ? q.data.name || q.data.code || 'Untitled' : '');
-          const data: ChainData = { name: c?.name ?? '', typeName: defs.get(c?.type ?? '')?.name ?? '', color: typeColor(c), count: qs.length, first: qName(qs[0]), last: qName(qs[qs.length - 1]), missing: !c };
+          const data: ChainData = {
+            name: c?.name ?? '', typeName: defs.get(c?.type ?? '')?.name ?? '', color: typeColor(c), count: qs.length, first: qName(qs[0]), last: qName(qs[qs.length - 1]), missing: !c,
+            rewards: showRewards && c ? rewardsByChain.get(c.id)?.lines ?? [] : undefined,
+          };
           return { ...base, data };
         }
         if (n.kind === 'and' || n.kind === 'or') {
@@ -211,7 +298,7 @@ function QuestMapInner() {
         return { ...base, data: { label: n.data.label ?? '', text: n.data.text ?? '' } };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, edges, chains, qNodes, defs],
+    [nodes, edges, chains, qNodes, defs, showRewards, rewardsByChain],
   );
 
   // React Flow keeps selection and drag state locally; the database keeps everything else.
@@ -420,6 +507,9 @@ function QuestMapInner() {
         <button type="button" className="btn small" onClick={importLinks} title="Create links from “Quest from another chain” nodes in the quest editor">
           <Icon name="link" size={14} /> Import links from quests
         </button>
+        <button type="button" className="btn small" aria-pressed={showRewards} onClick={toggleRewards} title="Show the total rewards of each chain on the map">
+          {showRewards ? '✓ ' : ''}Rewards
+        </button>
         {canvas.maxButton}
         <button type="button" className="btn small" onClick={autoLayout}>
           Auto-layout
@@ -516,6 +606,7 @@ function QuestMapInner() {
               node={selNode}
               chain={chainById.get(selNode.chain_id ?? '')}
               quests={selNode.chain_id ? questsOf(selNode.chain_id) : []}
+              rewards={selNode.chain_id ? rewardsByChain.get(selNode.chain_id) : undefined}
               edges={edges}
               allNodes={nodes}
               nodeName={nodeName}
@@ -569,6 +660,13 @@ function QuestMapInner() {
                 })}
                 {chains.length === 0 && <span className="muted">No quest chains yet. Create them in the Quests editor.</span>}
               </div>
+              <RewardBalance
+                rows={nodes
+                  .filter((n) => n.kind === 'chain' && n.chain_id && chainById.has(n.chain_id))
+                  .sort((a, b) => a.x - b.x || a.y - b.y)
+                  .map((n) => ({ id: n.id, chain: chainById.get(n.chain_id!)!, color: typeColor(chainById.get(n.chain_id!)), r: rewardsByChain.get(n.chain_id!)! }))}
+                onSelect={select}
+              />
             </>
           )}
         </aside>
@@ -583,6 +681,7 @@ function NodePanel(props: {
   node: MapNode;
   chain?: QuestChain;
   quests: QuestNode[];
+  rewards?: ReturnType<typeof chainRewards>;
   edges: MapEdge[];
   allNodes: MapNode[];
   nodeName: (n?: MapNode) => string;
@@ -638,6 +737,7 @@ function NodePanel(props: {
             <button type="button" className="btn small" style={{ alignSelf: 'flex-start' }} onClick={() => props.onOpen(chain.id)}>
               Open in quest editor →
             </button>
+            {props.rewards && <ChainRewardsBox r={props.rewards} />}
           </>
         )}
         {linkList('Comes after', ins, (e) => e.source)}
@@ -742,5 +842,117 @@ function LinkPanel({ links, nodeName, onDone }: { links: MapEdge[]; nodeName: (i
         <Icon name="trash" /> Cut {one ? 'link' : 'links'}
       </button>
     </>
+  );
+}
+
+/** Rewards of one chain: totals, then per quest / ending. */
+function ChainRewardsBox({ r }: { r: ReturnType<typeof chainRewards> }) {
+  return (
+    <div className="card-box" style={{ gap: 10 }}>
+      <span className="section-label">TOTAL REWARDS</span>
+      {r.lines.length === 0 ? (
+        <span className="muted" style={{ fontSize: 13 }}>No rewards in this chain yet.</span>
+      ) : (
+        <div className="reward-lines">
+          {r.lines.map((l) => (
+            <RewardLineView key={l.key} l={l} big />
+          ))}
+        </div>
+      )}
+      {r.endings > 1 && (
+        <span className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
+          Includes the rewards of all {r.endings} endings. A player only reaches one of them, so the real total is lower.
+        </span>
+      )}
+      {r.sources.length > 0 && (
+        <details>
+          <summary className="muted" style={{ fontSize: 12, cursor: 'pointer' }}>Per quest and ending</summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            {r.sources.map((s, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: s.kind === 'end' ? '#e0a083' : 'var(--text)' }}>{s.name}</span>
+                <div className="reward-lines">
+                  {s.lines.map((l) => (
+                    <RewardLineView key={l.key} l={l} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function RewardLineView({ l, big }: { l: RewardLine; big?: boolean }) {
+  return (
+    <span className={'reward-line' + (big ? ' big' : '')}>
+      {l.item ? <ItemIcon name={l.item.name} icon={l.item.icon_url} color={l.color} edge={l.color} size={big ? 18 : 14} /> : <i style={{ background: l.color }} />}
+      {lineText(l)}
+    </span>
+  );
+}
+
+/** Every chain on the map (left to right) with its totals per reward, as bars, to compare and balance them. */
+function RewardBalance({ rows, onSelect }: { rows: { id: string; chain: QuestChain; color: string; r: ReturnType<typeof chainRewards> }[]; onSelect: (id: string) => void }) {
+  if (!rows.length) return null;
+  const kinds = new Map<string, RewardLine>();
+  rows.forEach((row) => row.r.lines.filter((l) => l.numeric).forEach((l) => !kinds.has(l.key) && kinds.set(l.key, l)));
+  const list = sortLines([...kinds.values()]);
+  const others = (r: ReturnType<typeof chainRewards>) => r.lines.filter((l) => !l.numeric);
+  return (
+    <div className="card-box" style={{ gap: 12, padding: 12 }}>
+      <span className="section-label">REWARD BALANCE</span>
+      <span className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>Each chain on the map, left to right. Click a chain to see its rewards per quest.</span>
+      {list.length === 0 && <span className="muted" style={{ fontSize: 13 }}>No XP, currency or reputation rewards yet.</span>}
+      {list.map((k) => {
+        const vals = rows.map((row) => row.r.lines.find((l) => l.key === k.key)?.amount ?? 0);
+        const max = Math.max(1, ...vals.map(Math.abs));
+        const total = vals.reduce((a, b) => a + b, 0);
+        return (
+          <div key={k.key} className="bal-group">
+            <div className="bal-head">
+              <span style={{ color: k.color }}>{k.item ? <ItemIcon name={k.item.name} icon={k.item.icon_url} color={k.color} size={14} /> : null} {k.label}</span>
+              <span>total {fmt(total)}</span>
+            </div>
+            {rows.map((row, i) => (
+              <button key={row.id} type="button" className="bal-row" onClick={() => onSelect(row.id)}>
+                <span className="bal-name">
+                  <i style={{ background: row.color }} />
+                  {row.chain.name}
+                </span>
+                <span className="bal-track">
+                  <span style={{ width: `${(Math.abs(vals[i]) / max) * 100}%`, background: vals[i] < 0 ? '#e0705d' : k.color }} />
+                </span>
+                <span className="bal-val">{vals[i] ? fmt(vals[i]) : '—'}</span>
+              </button>
+            ))}
+          </div>
+        );
+      })}
+      {rows.some((row) => others(row.r).length) && (
+        <div className="bal-group">
+          <div className="bal-head">
+            <span>Items and other rewards</span>
+          </div>
+          {rows
+            .filter((row) => others(row.r).length)
+            .map((row) => (
+              <button key={row.id} type="button" className="bal-row other" onClick={() => onSelect(row.id)}>
+                <span className="bal-name">
+                  <i style={{ background: row.color }} />
+                  {row.chain.name}
+                </span>
+                <span className="reward-lines">
+                  {others(row.r).map((l) => (
+                    <RewardLineView key={l.key} l={l} />
+                  ))}
+                </span>
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
   );
 }
