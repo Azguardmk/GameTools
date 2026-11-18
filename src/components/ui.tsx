@@ -213,3 +213,34 @@ export function Icon({ name, size = 16 }: { name: 'plus' | 'copy' | 'undo' | 're
     </svg>
   );
 }
+
+/** Two-letter monogram for an item without an icon image. */
+export function monogram(name: string) {
+  const w = name.replace(/^Blueprint:\s*/i, '').split(/\s+/).filter(Boolean);
+  if (!w.length) return '?';
+  return (w[0][0] + (w[1] ? w[1][0] : w[0][1] ?? '')).toUpperCase();
+}
+
+/** Small square icon for an item: its image, or a monogram tinted by category and edged by rarity. */
+export function ItemIcon({ name, icon, color, edge, size = 22 }: { name: string; icon?: string | null; color?: string; edge?: string; size?: number }) {
+  return (
+    <span
+      className="item-icon"
+      aria-hidden="true"
+      style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.4)), background: (color ?? '#3a362f') + '40', borderColor: edge ?? color ?? '#3a362f' }}
+    >
+      {icon ? <img src={icon} alt="" /> : monogram(name)}
+    </span>
+  );
+}
+
+/** Round initials badge for a character / NPC. */
+export function NpcIcon({ name, color, size = 24 }: { name: string; color?: string; size?: number }) {
+  const w = name.split(/\s+/).filter(Boolean);
+  const ini = ((w[0]?.[0] ?? '?') + (w[1]?.[0] ?? w[0]?.[1] ?? '')).toUpperCase();
+  return (
+    <span className="npc-icon" aria-hidden="true" style={{ width: size, height: size, fontSize: Math.round(size * 0.4), background: color ?? '#5a544a', color: textOn(color ?? '#5a544a') }}>
+      {ini}
+    </span>
+  );
+}

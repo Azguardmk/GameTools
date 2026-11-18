@@ -54,6 +54,7 @@ import {
 } from './quest/shared';
 import PlayMode from './quest/Play';
 import { DefSelect, Icon, SwatchPicker, TextField } from '../components/ui';
+import { LIBRARY_MIME, Library, type LibraryDrop } from './quest/Library';
 
 // ---------- page ----------
 export default function QuestsPage() {
@@ -312,6 +313,66 @@ function QuestsInner() {
     setSel(id);
   };
 
+  // ---- NPC / item library ----
+  const [libOpen, setLibOpen] = useState(() => localStorage.getItem('earthlings-tools:library') !== 'closed');
+  const toggleLib = () => {
+    localStorage.setItem('earthlings-tools:library', libOpen ? 'closed' : 'open');
+    setLibOpen(!libOpen);
+  };
+  const [dropHover, setDropHover] = useState(false);
+  const [libNote, setLibNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!libNote) return;
+    const t = setTimeout(() => setLibNote(null), 3500);
+    return () => clearTimeout(t);
+  }, [libNote]);
+  const selectOnly = (id: string) => {
+    pendingSelect.current = new Set([id]);
+    setRfNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === id })));
+    setSelectedEdges(new Set());
+    setSel(id);
+  };
+  /** Uses an NPC or item on a node (or on empty space at `at`). */
+  const applyLibrary = (d: LibraryDrop, targetId: string | null, at?: { x: number; y: number }) => {
+    if (!chainId) return;
+    const target = targetId ? chainNodes.find((n) => n.id === targetId) : undefined;
+    const setData = (patch: Record<string, unknown>) => target && update('quest_nodes', target.id, { data: { ...target.data, ...patch } });
+    if (d.kind === 'npc') {
+      const npc = defs.get(d.id);
+      if (!npc) return;
+      if (target?.kind === 'quest') return setData({ giver_id: npc.id, giver: npc.name }), selectOnly(target.id), setLibNote(`${npc.name} is now the quest giver`);
+      if (target && (target.kind === 'dialogue' || target.kind === 'end')) return setData({ speaker: npc.id }), selectOnly(target.id), setLibNote(`${npc.name} now speaks here`);
+      if (target) return setLibNote('Drop NPCs on a quest, dialogue or End node, or on empty space');
+      const pos = at ?? rf.screenToFlowPosition({ x: window.innerWidth * 0.45, y: window.innerHeight * 0.5 });
+      const id = newId();
+      insert('quest_nodes', { id, chain_id: chainId, kind: 'dialogue', x: Math.round(pos.x - 90), y: Math.round(pos.y - 30), data: { speaker: npc.id, text: '' } });
+      pendingSelect.current = new Set([id]);
+      setSel(id);
+      return;
+    }
+    const item = ctx.itemsById.get(d.id);
+    if (!item) return;
+    if (!target || (target.kind !== 'quest' && target.kind !== 'end')) return setLibNote(target ? 'Items go on a quest or End node as a reward' : 'Drop the item on a quest or End node to add it as a reward');
+    const cat = defs.get(item.category)?.name ?? '';
+    const types = defs.list('reward_type');
+    const want = /currenc|coin|money/i.test(cat) ? /currenc|coin|money/i : /blueprint/i.test(cat) ? /blueprint/i : /item/i;
+    const type = (types.find((t) => want.test(t.name)) ?? types.find((t) => /item/i.test(t.name)) ?? types[0])?.id ?? null;
+    const rewards = Array.isArray(target.data.rewards) ? target.data.rewards : [];
+    const existing = rewards.findIndex((r: { item: string | null }) => r.item === item.id);
+    const next = existing >= 0 ? rewards.map((r: { amount: number }, i: number) => (i === existing ? { ...r, amount: (r.amount || 0) + 1 } : r)) : [...rewards, { type, text: '', item: item.id, amount: 1 }];
+    setData({ rewards: next });
+    selectOnly(target.id);
+    setLibNote(`${item.name} added as a reward`);
+  };
+  const nodeAtPoint = (x: number, y: number) => (document.elementFromPoint(x, y)?.closest('.react-flow__node') as HTMLElement | null)?.dataset.id ?? null;
+  const lastDropTarget = useRef<HTMLElement | null>(null);
+  const markDropTarget = (el: HTMLElement | null) => {
+    if (lastDropTarget.current === el) return;
+    lastDropTarget.current?.classList.remove('drop-target');
+    el?.classList.add('drop-target');
+    lastDropTarget.current = el;
+  };
+
   const addQuest = () => {
     const prefix = chains.find((c) => c.id === chainId)?.name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() || 'XX';
     const count = chainNodes.filter((n) => n.kind === 'quest').length + 1;
@@ -528,7 +589,33 @@ function QuestsInner() {
 
           <div className="split">
             <div className="main" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div className="flow-wrap">
+              <div className="quest-work">
+              <Library open={libOpen} onToggle={toggleLib} onPick={(d) => applyLibrary(d, selId)} />
+              <div
+                className={'flow-wrap' + (dropHover ? ' drop-hover' : '')}
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes(LIBRARY_MIME)) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'copy';
+                  setDropHover(true);
+                  markDropTarget((document.elementFromPoint(e.clientX, e.clientY)?.closest('.react-flow__node') as HTMLElement | null) ?? null);
+                }}
+                onDragLeave={(e) => {
+                  if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as globalThis.Node | null)) {
+                    setDropHover(false);
+                    markDropTarget(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  const raw = e.dataTransfer.getData(LIBRARY_MIME);
+                  setDropHover(false);
+                  markDropTarget(null);
+                  if (!raw) return;
+                  e.preventDefault();
+                  applyLibrary(JSON.parse(raw) as LibraryDrop, nodeAtPoint(e.clientX, e.clientY), rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+                }}
+              >
+                {libNote && <div className="lib-note" role="status">{libNote}</div>}
                 <ReactFlow
                   key={chainId}
                   nodes={rfNodes}
@@ -570,6 +657,7 @@ function QuestsInner() {
                   <Controls showInteractive={false} />
                   <MiniMap pannable zoomable nodeColor={(n) => NODE_META[(n.type ?? 'quest') as NodeKind]?.color ?? '#c294d6'} maskColor="rgba(15,14,13,0.7)" />
                 </ReactFlow>
+              </div>
               </div>
               <div className="legend">
                 <span><i style={{ borderColor: EDGE_COLORS.unlocks }} />Unlocks</span>

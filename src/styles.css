@@ -328,3 +328,27 @@ select option:checked { background: #a9d39a; color: #000; }
 
 .end-rewards { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .end-rewards > span { padding: 1px 7px; border-radius: 999px; background: #2a2416; border: 1px solid #5a4a2a; color: #f0d29a; font-size: 11px; font-weight: 600; }
+
+/* Quest editor library (NPCs, items, currency) */
+.quest-work { display: flex; gap: 10px; align-items: stretch; }
+.quest-work > .flow-wrap { flex: 1; min-width: 0; }
+.library { width: 268px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); height: calc(100vh - 250px); min-height: 520px; }
+.lib-head { display: flex; gap: 4px; align-items: center; }
+.lib-head .seg button { padding: 6px 4px; font-size: 11px; white-space: nowrap; }
+.lib-list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 0 -4px; padding: 0 4px; }
+.lib-entry { display: flex; align-items: center; gap: 9px; padding: 6px 6px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: grab; }
+.lib-entry:hover { background: #1f1d19; border-color: var(--line); }
+.lib-entry:active { cursor: grabbing; }
+.lib-text { display: flex; flex-direction: column; min-width: 0; }
+.lib-text strong { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-text span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-collapsed { flex: none; width: 30px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text-2); cursor: pointer; padding: 0; }
+.lib-collapsed span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; }
+.item-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; border: 1.5px solid; color: #f1ebdf; font-family: 'Space Grotesk', sans-serif; font-weight: 700; overflow: hidden; }
+.item-icon img { width: 100%; height: 100%; object-fit: cover; }
+.npc-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 700; }
+.flow-wrap.drop-hover { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.react-flow__node.drop-target > div { box-shadow: 0 0 0 3px rgba(217,167,94,0.7) !important; }
+.end-rewards > span { display: inline-flex; align-items: center; gap: 4px; }
+.flow-wrap { position: relative; }
+.lib-note { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 10; padding: 7px 14px; border-radius: 999px; background: #2a2620; border: 1px solid #4a453c; font-size: 13px; color: var(--text); box-shadow: 0 6px 18px rgba(0,0,0,0.45); pointer-events: none; }

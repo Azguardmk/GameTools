@@ -3,7 +3,7 @@ import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, type Edge
 import { remove } from '../../lib/db';
 import type { useDefinitions, useMembers } from '../../lib/hooks';
 import type { Definition, EdgeKind, Item, NodeKind, QuestChain, QuestData, QuestEdge, QuestNode } from '../../lib/types';
-import { Icon, MemberBadge } from '../../components/ui';
+import { ItemIcon, Icon, MemberBadge } from '../../components/ui';
 
 /*
  * Shared pieces of the quest editor: node look, colours, condition logic and problem checks.
@@ -381,9 +381,14 @@ function EndNode({ data, selected }: NodeProps) {
       )}
       {rewards.length > 0 && (
         <span className="end-rewards">
-          {rewards.map((r: any, i: number) => (
-            <span key={i}>+ {rewardText(r, defs, itemsById)}</span>
-          ))}
+          {rewards.map((r: any, i: number) => {
+            const it = r.item ? itemsById.get(r.item) : undefined;
+            return (
+              <span key={i}>
+                {it ? <ItemIcon name={it.name} icon={it.icon_url} color={defs.get(it.category)?.color} edge={defs.get(it.rarity)?.color} size={14} /> : '+'} {rewardText(r, defs, itemsById)}
+              </span>
+            );
+          })}
         </span>
       )}
     </div>
