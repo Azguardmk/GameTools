@@ -216,6 +216,7 @@ function QuestMapInner() {
   const [rfNodes, setRfNodes] = useState<Node[]>([]);
   useEffect(() => {
     setRfNodes((prev) => {
+      if (prev.length === 0 && built.length === 0) return prev;
       const sel = new Set(prev.filter((n) => n.selected).map((n) => n.id));
       return built.map((n) => ({ ...n, selected: sel.has(n.id) }));
     });

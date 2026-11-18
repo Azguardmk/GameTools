@@ -106,6 +106,8 @@ function ensureSubscribed(t: Table) {
     .subscribe();
 }
 
+const EMPTY: Row[] = [];
+
 export function useTable<T>(t: Table): { rows: T[]; loaded: boolean } {
   const [, force] = useState(0);
   useEffect(() => {
@@ -117,11 +119,12 @@ export function useTable<T>(t: Table): { rows: T[]; loaded: boolean } {
       listeners[t]?.delete(fn);
     };
   }, [t]);
-  return { rows: (cache[t] ?? []) as T[], loaded: loaded.has(t) };
+  // Same empty array every time, so pages don't re-render forever before a table has loaded.
+  return { rows: (cache[t] ?? EMPTY) as T[], loaded: loaded.has(t) };
 }
 
 export function snapshot<T>(t: Table): T[] {
-  return (cache[t] ?? []) as T[];
+  return (cache[t] ?? EMPTY) as T[];
 }
 
 // ---------- undo / redo ----------
