@@ -102,6 +102,32 @@ create table if not exists quest_edges (
 );
 alter table quest_edges add column if not exists source_handle text;
 
+alter table quest_chains add column if not exists type text;
+
+-- Quest map: a flow chart of whole quest chains plus logic nodes.
+-- kind: chain | start | end | and | or | split | back | note
+-- data: { label?, text?, ref? (map node a "back" node returns to) }
+create table if not exists map_nodes (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null,
+  chain_id uuid references quest_chains(id) on delete cascade,
+  x double precision not null default 0,
+  y double precision not null default 0,
+  data jsonb not null default '{}'::jsonb
+);
+
+-- kind: main | side | unlock | fail
+create table if not exists map_edges (
+  id uuid primary key default gen_random_uuid(),
+  source uuid references map_nodes(id) on delete cascade,
+  target uuid references map_nodes(id) on delete cascade,
+  kind text not null default 'main',
+  label text not null default ''
+);
+create index if not exists map_nodes_chain_idx on map_nodes(chain_id);
+create index if not exists map_edges_source_idx on map_edges(source);
+create index if not exists map_edges_target_idx on map_edges(target);
+
 create index if not exists tasks_group_idx on tasks(group_id);
 create index if not exists items_category_idx on items(category);
 create index if not exists items_rarity_idx on items(rarity);
@@ -116,7 +142,7 @@ create index if not exists quest_edges_target_idx on quest_edges(target);
 do $$
 declare t text;
 begin
-  foreach t in array array['members','definitions','task_groups','tasks','items','quest_chains','quest_nodes','quest_edges'] loop
+  foreach t in array array['members','definitions','task_groups','tasks','items','quest_chains','quest_nodes','quest_edges','map_nodes','map_edges'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "team access" on public.%I', t);
     execute format('create policy "team access" on public.%I for all to authenticated using (true) with check (true)', t);
@@ -128,7 +154,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['members','definitions','task_groups','tasks','items','quest_chains','quest_nodes','quest_edges'] loop
+  foreach t in array array['members','definitions','task_groups','tasks','items','quest_chains','quest_nodes','quest_edges','map_nodes','map_edges'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', t);
     exception when duplicate_object then null;

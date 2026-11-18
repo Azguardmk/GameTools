@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import { group, insert, newId, remove, snapshot, update, useTable } from '../lib/db';
 import { SWATCHES, download, useDefinitions, useMembers } from '../lib/hooks';
-import { enumKey, type Item, type NodeKind, type QuestChain, type QuestData, type QuestEdge, type QuestNode, type Task, type TaskGroup } from '../lib/types';
+import { enumKey, type Item, type MapEdge, type MapNode, type NodeKind, type QuestChain, type QuestData, type QuestEdge, type QuestNode, type Task, type TaskGroup } from '../lib/types';
 import {
   ACTION_OPS,
   EDGE_COLORS,
@@ -657,7 +657,11 @@ function ChainPanel({ chain, onDeleted }: { chain: QuestChain; onDeleted: () => 
           const ns = snapshot<QuestNode>('quest_nodes').filter((n) => n.chain_id === chain.id);
           if (!confirm(ns.length ? `Delete "${chain.name}" and its ${ns.length} nodes?` : `Delete "${chain.name}"?`)) return;
           const es = snapshot<QuestEdge>('quest_edges').filter((e) => e.chain_id === chain.id || ns.some((n) => n.id === e.source || n.id === e.target));
+          const mapNodes = snapshot<MapNode>('map_nodes').filter((m) => m.chain_id === chain.id).map((m) => m.id);
+          const mapEdges = snapshot<MapEdge>('map_edges').filter((e) => mapNodes.includes(e.source) || mapNodes.includes(e.target)).map((e) => e.id);
           await group(async () => {
+            if (mapEdges.length) await remove('map_edges', mapEdges);
+            if (mapNodes.length) await remove('map_nodes', mapNodes);
             if (es.length) await remove('quest_edges', es.map((e) => e.id));
             if (ns.length) await remove('quest_nodes', ns.map((n) => n.id));
             await remove('quest_chains', chain.id);
@@ -769,6 +773,13 @@ function OtherPanel({ node, chainId, edges, onDelete, onOpen }: { node: QuestNod
       <>
         <span className="section-label" style={{ color: NODE_META.start.color }}>START</span>
         {help('Where this chain begins. Play mode starts here. Connect it to the first dialogue or quest.')}
+        {chains.get(node.chain_id) && (
+          <label className="field">
+            <span className="field-label">Quest type of this chain</span>
+            <DefSelect options={defs.list('quest_type')} value={chains.get(node.chain_id)!.type} onChange={(v) => update('quest_chains', node.chain_id, { type: v })} label="Quest type of this chain" allowEmpty />
+            <span className="muted" style={{ fontSize: 12 }}>Colours this chain on the Quest map (Main, Side…).</span>
+          </label>
+        )}
         <label className="field">
           <span className="field-label">How the chain begins (optional)</span>
           <TextField multiline value={node.data.text ?? ''} label="Start text" placeholder="e.g. The player arrives at the Tramyard for the first time" onCommit={(v) => set({ text: v })} />

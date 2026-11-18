@@ -6,7 +6,9 @@ export type Table =
   | 'items'
   | 'quest_chains'
   | 'quest_nodes'
-  | 'quest_edges';
+  | 'quest_edges'
+  | 'map_nodes'
+  | 'map_edges';
 
 export const TABLES: Table[] = [
   'members',
@@ -17,6 +19,8 @@ export const TABLES: Table[] = [
   'quest_chains',
   'quest_nodes',
   'quest_edges',
+  'map_nodes',
+  'map_edges',
 ];
 
 export interface Member {
@@ -93,6 +97,27 @@ export interface QuestChain {
   name: string;
   color: string;
   sort: number;
+  /** Quest type (Main, Side…) from Definitions; colours the chain on the Quest map. */
+  type?: string | null;
+}
+
+/** Quest map: whole chains plus flow nodes (start, end, AND, OR, pick one, go back, note). */
+export type MapNodeKind = 'chain' | 'start' | 'end' | 'and' | 'or' | 'split' | 'back' | 'note';
+export interface MapNode {
+  id: string;
+  kind: MapNodeKind;
+  chain_id: string | null;
+  x: number;
+  y: number;
+  data: { label?: string; text?: string; ref?: string | null };
+}
+export type MapEdgeKind = 'main' | 'side' | 'unlock' | 'fail';
+export interface MapEdge {
+  id: string;
+  source: string;
+  target: string;
+  kind: MapEdgeKind;
+  label: string;
 }
 
 export type NodeKind = 'start' | 'end' | 'quest' | 'dialogue' | 'condition' | 'action' | 'choice' | 'external' | 'note' | 'reroute';

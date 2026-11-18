@@ -186,9 +186,9 @@ export function buildSeed(): Record<Table, Row[]> {
   // ---- quests ----
   const ch = { brass: newId(), undercity: newId(), watch: newId() };
   const quest_chains = [
-    { id: ch.brass, name: 'The Brass Conspiracy', color: '#d9a75e', sort: 0 },
-    { id: ch.undercity, name: 'Undercity Pipes', color: '#6fb3d6', sort: 1 },
-    { id: ch.watch, name: 'City Watch Patrols', color: '#c294d6', sort: 2 },
+    { id: ch.brass, name: 'The Brass Conspiracy', color: '#d9a75e', sort: 0, type: qt.main },
+    { id: ch.undercity, name: 'Undercity Pipes', color: '#6fb3d6', sort: 1, type: qt.side },
+    { id: ch.watch, name: 'City Watch Patrols', color: '#c294d6', sort: 2, type: qt.guild },
   ];
   const q = (chain_id: string, x: number, y: number, data: Partial<QuestData>) => ({
     id: newId(), chain_id, kind: 'quest', x, y,
@@ -259,7 +259,22 @@ export function buildSeed(): Record<Table, Row[]> {
     e(ch.undercity, drains.id, ratKing.id, 'unlocks'),
   ];
 
+  // ---- quest map ----
+  const mn = (kind: string, x: number, y: number, chain_id: string | null = null, data: Record<string, any> = {}) => ({ id: newId(), kind, chain_id, x, y, data });
+  const mStart = mn('start', 0, 120, null, { label: 'Act I begins' });
+  const mWatch = mn('chain', 200, 0, ch.watch);
+  const mAnd = mn('and', 520, 128);
+  const mBrass = mn('chain', 640, 100, ch.brass);
+  const mUnder = mn('chain', 980, 260, ch.undercity);
+  const mEnd = mn('end', 1000, 120, null, { label: 'End of Act I' });
+  const mNote = mn('note', 200, 260, null, { text: 'Undercity Pipes opens once the whistle is found in The Brass Conspiracy.' });
+  const map_nodes = [mStart, mWatch, mAnd, mBrass, mUnder, mEnd, mNote];
+  const me = (a: { id: string }, b: { id: string }, kind: string, label = '') => ({ id: newId(), source: a.id, target: b.id, kind, label });
+  const map_edges = [me(mStart, mWatch, 'side'), me(mStart, mAnd, 'main'), me(mWatch, mAnd, 'unlock', 'Sworn to the Watch'), me(mAnd, mBrass, 'main'), me(mBrass, mEnd, 'main'), me(mBrass, mUnder, 'side')];
+
   return {
+    map_nodes,
+    map_edges,
     members,
     definitions: defs as unknown as Row[],
     task_groups,
@@ -271,7 +286,7 @@ export function buildSeed(): Record<Table, Row[]> {
   };
 }
 
-const ORDER: Table[] = ['members', 'definitions', 'task_groups', 'tasks', 'items', 'quest_chains', 'quest_nodes', 'quest_edges'];
+const ORDER: Table[] = ['members', 'definitions', 'task_groups', 'tasks', 'items', 'quest_chains', 'quest_nodes', 'quest_edges', 'map_nodes', 'map_edges'];
 
 export async function loadStarterData(): Promise<void> {
   const seed = buildSeed();

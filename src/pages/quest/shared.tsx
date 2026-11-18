@@ -330,6 +330,8 @@ function Box(props: { id: string; selected?: boolean; color: string; bg: string;
 
 function StartNode({ data, selected }: NodeProps) {
   const n = data.node as QuestNode;
+  const { chains, defs } = useContext(QuestCtx);
+  const type = defs.get(chains.get(n.chain_id)?.type ?? '');
   return (
     <div className={'snode start-node' + (selected ? ' selected' : '')}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -337,6 +339,11 @@ function StartNode({ data, selected }: NodeProps) {
         <strong>START</strong>
         <Warn id={n.id} />
       </span>
+      {type && (
+        <span className="start-type" style={{ background: type.color }}>
+          {type.name.toUpperCase()}
+        </span>
+      )}
       {n.data.text && <span style={{ fontSize: 12, color: '#d6e9cc' }}>{n.data.text}</span>}
       <Handle type="source" position={Position.Right} />
     </div>
