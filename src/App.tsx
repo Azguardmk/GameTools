@@ -12,6 +12,7 @@ import QuestsPage from './pages/Quests';
 import QuestMapPage from './pages/QuestMap';
 import ItemsPage from './pages/Items';
 import DefinitionsPage from './pages/Definitions';
+import MapPage from './pages/MapPage';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -45,6 +46,7 @@ export default function App() {
           <NavLink to="/tasks">Tasks</NavLink>
           <NavLink to="/quests">Quests</NavLink>
           <NavLink to="/quest-map">Quest map</NavLink>
+          <NavLink to="/map">Map</NavLink>
           <NavLink to="/items">Items</NavLink>
           <NavLink to="/definitions">Definitions</NavLink>
         </nav>
@@ -78,6 +80,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/quests" element={<QuestsPage />} />
         <Route path="/quest-map" element={<QuestMapPage />} />
+        <Route path="/map" element={<MapPage />} />
         <Route path="/items" element={<ItemsPage />} />
         <Route path="/definitions" element={<DefinitionsPage />} />
         <Route path="*" element={<Navigate to="/tasks" replace />} />

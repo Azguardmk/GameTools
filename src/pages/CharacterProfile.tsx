@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { newId, update, useTable } from '../lib/db';
+import { insert, newId, update, useTable } from '../lib/db';
+import { uploadMapImage } from '../lib/mapImages';
+import { MapView } from '../components/MapView';
 import { useDefinitions } from '../lib/hooks';
 import type { Definition, QuestNode } from '../lib/types';
 import { DefSelect, Icon, NpcIcon, TextField } from '../components/ui';
@@ -121,22 +123,7 @@ export function CharacterProfile({ c, onClose, onOpen }: { c: Definition; onClos
             </div>
           </div>
 
-          <div className="grid2">
-            <label className="field">
-              <span className="field-label">Region</span>
-              <DefSelect options={defs.list('region')} value={c.extra?.region || null} allowEmpty label="Region" onChange={(v) => set({ region: v ?? '' })} />
-            </label>
-            <label className="field">
-              <span className="field-label">District</span>
-              <DefSelect
-                options={defs.list('district').filter((d) => !c.extra?.region || !d.extra?.region || d.extra.region === c.extra.region)}
-                value={c.extra?.district || null}
-                allowEmpty
-                label="District"
-                onChange={(v) => set({ district: v ?? '', region: (v && defs.get(v)?.extra?.region) || c.extra?.region || '' })}
-              />
-            </label>
-          </div>
+          <LocationSection c={c} set={set} />
           <label className="field">
             <span className="field-label">Role</span>
             <TextField value={c.extra?.role ?? ''} label="Role" placeholder="e.g. Clockmaker" onCommit={(v) => set({ role: v })} />
@@ -223,5 +210,99 @@ export function CharacterProfile({ c, onClose, onOpen }: { c: Definition; onClos
       </aside>
     </div>,
     document.body,
+  );
+}
+
+/** Where the NPC is: region, district, location, building, and a red star on the level map. */
+function LocationSection({ c, set }: { c: Definition; set: (patch: Record<string, unknown>) => void }) {
+  const defs = useDefinitions();
+  const [busy, setBusy] = useState(false);
+  const regionId: string = c.extra?.region || defs.get(c.extra?.district)?.extra?.region || '';
+  const region = defs.get(regionId);
+  const pin = c.extra?.pin && c.extra.pin.region === regionId ? (c.extra.pin as { region: string; x: number; y: number }) : null;
+  const districts = defs.list('district').filter((d) => !regionId || !d.extra?.region || d.extra.region === regionId);
+  const locations = defs.list('location').filter((l) => (c.extra?.district ? !l.extra?.district || l.extra.district === c.extra.district : !regionId || !l.extra?.region || l.extra.region === regionId));
+  const buildings = defs.list('building').filter((b) => (c.extra?.location ? !b.extra?.location || b.extra.location === c.extra.location : c.extra?.district ? !b.extra?.district || b.extra.district === c.extra.district : true));
+  const nextSort = (list: string) => {
+    const rows = defs.list(list as never);
+    return rows.length ? Math.max(...rows.map((r) => r.sort)) + 1 : 0;
+  };
+  const addNew = (list: 'location' | 'building') => {
+    const name = prompt(list === 'location' ? 'Name of the new location (e.g. Gare du Nord platform)' : 'Name of the new building (e.g. Venn’s Clock Shop)');
+    if (!name?.trim()) return;
+    const id = newId();
+    const extra = list === 'location' ? { region: regionId, district: c.extra?.district ?? '', notes: '' } : { location: c.extra?.location ?? '', district: c.extra?.district ?? '', notes: '' };
+    insert('definitions', { id, list, name: name.trim(), color: c.color, sort: nextSort(list), extra });
+    set({ [list]: id });
+  };
+  const upload = async (file?: File | null) => {
+    if (!file || !region) return;
+    setBusy(true);
+    try {
+      const url = await uploadMapImage(region.id, file);
+      update('definitions', region.id, { extra: { ...region.extra, map: url } });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card-box">
+      <span className="section-label">LOCATION</span>
+      <div className="grid2">
+        <label className="field">
+          <span className="field-label">Region / level</span>
+          <DefSelect options={defs.list('region')} value={regionId || null} allowEmpty label="Region" onChange={(v) => set({ region: v ?? '' })} />
+        </label>
+        <label className="field">
+          <span className="field-label">District</span>
+          <DefSelect options={districts} value={c.extra?.district || null} allowEmpty label="District" onChange={(v) => set({ district: v ?? '', region: (v && defs.get(v)?.extra?.region) || regionId })} />
+        </label>
+        <div className="field">
+          <span className="field-label">Location</span>
+          <div className="list-row">
+            <span className="grow">
+              <DefSelect options={locations} value={c.extra?.location || null} allowEmpty label="Location" onChange={(v) => set({ location: v ?? '' })} />
+            </span>
+            <button type="button" className="icon-btn" title="New location" aria-label="New location" onClick={() => addNew('location')}>
+              <Icon name="plus" size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="field">
+          <span className="field-label">Building</span>
+          <div className="list-row">
+            <span className="grow">
+              <DefSelect options={buildings} value={c.extra?.building || null} allowEmpty label="Building" onChange={(v) => set({ building: v ?? '' })} />
+            </span>
+            <button type="button" className="icon-btn" title="New building" aria-label="New building" onClick={() => addNew('building')}>
+              <Icon name="plus" size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {!region ? (
+        <span className="muted" style={{ fontSize: 13 }}>Pick a region to place this NPC on its map.</span>
+      ) : region.extra?.map ? (
+        <>
+          <MapView image={region.extra.map} height={320} pins={pin ? [{ id: c.id, x: pin.x, y: pin.y, color: '#e0303c', label: c.name, active: true }] : []} onPlace={(x, y) => set({ pin: { region: region.id, x, y } })} onMove={(_id, x, y) => set({ pin: { region: region.id, x, y } })} starSize={20} />
+          <div className="list-row" style={{ fontSize: 12 }}>
+            <span className="muted grow">{pin ? 'Click the map to move the red star, or drag it. Scroll to zoom, drag to move around.' : 'Click the map to place this NPC (a red star).'}</span>
+            {pin && (
+              <button type="button" className="btn ghost small" onClick={() => set({ pin: null })}>
+                Remove star
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <label className="map-empty" style={{ cursor: 'pointer' }}>
+          <strong style={{ color: 'var(--text)' }}>No map for {region.name} yet</strong>
+          {busy ? 'Uploading…' : 'Click to upload the level map image (PNG or JPG). It’s shared with the Map tab.'}
+          <input type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
+        </label>
+      )}
+    </div>
   );
 }

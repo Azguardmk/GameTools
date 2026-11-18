@@ -193,7 +193,9 @@ export type ListKey =
   | 'quest_status'
   | 'task_priority'
   | 'task_status'
-  | 'faction_leader';
+  | 'faction_leader'
+  | 'location'
+  | 'building';
 
 export interface ListMeta {
   key: ListKey;
@@ -222,8 +224,19 @@ export const LISTS: ListMeta[] = [
     description: 'Ways a player can get an item.', extras: [] },
   { key: 'character', group: 'World', title: 'Characters / NPCs', enumName: 'E_Character',
     description: 'NPCs and other characters. Used as quest givers and as speakers in dialogue nodes.',
-    extras: [{ key: 'region', label: 'Region', ref: 'region' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'role', label: 'Role', placeholder: 'e.g. Clockmaker' }],
+    extras: [
+      { key: 'region', label: 'Region', ref: 'region' },
+      { key: 'district', label: 'District', ref: 'district' },
+      { key: 'location', label: 'Location', ref: 'location' },
+      { key: 'role', label: 'Role', placeholder: 'e.g. Clockmaker' },
+    ],
     profile: true },
+  { key: 'location', group: 'World', title: 'Locations', enumName: 'E_Location',
+    description: 'Named places inside a district (a square, a market, the train station…). NPCs and buildings can be placed at a location.',
+    extras: [{ key: 'region', label: 'Region', ref: 'region' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'notes', label: 'Notes', placeholder: 'What is here' }] },
+  { key: 'building', group: 'World', title: 'Buildings', enumName: 'E_Building',
+    description: 'Buildings NPCs live or work in. Each building can sit at a location.',
+    extras: [{ key: 'location', label: 'Location', ref: 'location' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'notes', label: 'Notes', placeholder: 'e.g. Clock shop, 3 floors' }] },
   { key: 'variable', group: 'Quests', title: 'Story variables', enumName: 'E_StoryVariable',
     description: 'Flags and counters the story remembers, e.g. helped_guild or rep_city_watch. Conditions check them and “Set variable” nodes change them.',
     extras: [{ key: 'type', label: 'Type', options: ['Boolean', 'Integer', 'Text'] }, { key: 'default', label: 'Starts as', placeholder: 'false / 0 / text' }] },
