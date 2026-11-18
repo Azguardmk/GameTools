@@ -3,7 +3,7 @@ import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, type Edge
 import { remove } from '../../lib/db';
 import type { useDefinitions, useMembers } from '../../lib/hooks';
 import type { Definition, EdgeKind, Item, NodeKind, QuestChain, QuestData, QuestEdge, QuestNode } from '../../lib/types';
-import { ItemIcon, Icon, MemberBadge } from '../../components/ui';
+import { ItemIcon, NpcIcon, Icon, MemberBadge } from '../../components/ui';
 
 /*
  * Shared pieces of the quest editor: node look, colours, condition logic and problem checks.
@@ -255,7 +255,7 @@ function Warn({ id }: { id: string }) {
 }
 
 function QuestNodeView({ data, selected }: NodeProps) {
-  const { defs, members } = useContext(QuestCtx);
+  const { defs, members, itemsById } = useContext(QuestCtx);
   const n = data.node as QuestNode;
   const d = n.data as QuestData;
   const status = defs.get(d.status);
@@ -275,13 +275,21 @@ function QuestNodeView({ data, selected }: NodeProps) {
       </div>
       <div className="qbody">
         <span className="qname">{d.name || 'Untitled quest'}</span>
-        {(giver || district) && (
-          <span className="qrow">
-            {giver && <span style={{ color: giver.color }}>{giver.name}</span>}
-            {giver && district && '·'}
-            {district && <span>{district.name}</span>}
+        {giver || d.giver ? (
+          <span className="qgiver" style={{ borderColor: (giver?.color ?? '#5a544a') + '88' }}>
+            <NpcIcon name={giver?.name ?? d.giver} color={giver?.color} size={26} />
+            <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <span className="qgiver-label">TALK TO</span>
+              <strong style={{ color: giver?.color ?? 'var(--text)' }}>{giver?.name ?? d.giver}</strong>
+              {(giver?.extra?.role || defs.get(giver?.extra?.district) || district) && (
+                <span className="qgiver-sub">{[giver?.extra?.role, (defs.get(giver?.extra?.district) ?? district)?.name].filter(Boolean).join(' · ')}</span>
+              )}
+            </span>
           </span>
+        ) : (
+          <span className="qgiver none">No quest giver yet</span>
         )}
+        {district && (giver?.extra?.district ? giver.extra.district !== d.district : !giver) && <span className="qrow">{district.name}</span>}
         <span className="qrow">
           {d.level ? 'Lv ' + d.level + ' · ' : ''}
           {d.objectives?.length ?? 0} objectives
@@ -291,9 +299,11 @@ function QuestNodeView({ data, selected }: NodeProps) {
           <span className="qrow" style={{ gap: 4 }}>
             {d.rewards.slice(0, 4).map((r, i) => {
               const t = defs.get(r.type);
+              const it = r.item ? itemsById.get(r.item) : undefined;
               return (
-                <span key={i} className="tag" style={{ height: 18, fontSize: 9, color: t?.color, background: (t?.color ?? '#888') + '26' }}>
-                  {t?.name ?? 'Reward'}
+                <span key={i} className="tag" style={{ height: 18, fontSize: 9, gap: 3, color: t?.color, background: (t?.color ?? '#888') + '26' }}>
+                  {it && <ItemIcon name={it.name} icon={it.icon_url} color={defs.get(it.category)?.color} edge={defs.get(it.rarity)?.color} size={12} />}
+                  {rewardText(r, defs, itemsById)}
                 </span>
               );
             })}
