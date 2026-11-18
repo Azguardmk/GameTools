@@ -267,13 +267,26 @@ export function newId(): string {
   return crypto.randomUUID();
 }
 
+/*
+ * Very large rows (usually a pasted picture) make the whole table slow or impossible to load for everyone,
+ * so they are refused. Pictures belong in files or links, not in the data.
+ */
+const MAX_ROW_CHARS = 400_000;
+function tooBig(value: unknown): boolean {
+  if (JSON.stringify(value ?? null).length <= MAX_ROW_CHARS) return false;
+  reportError({ message: 'Not saved: this is too big (probably a picture). Use the image upload, which shrinks it, or an image link.' });
+  return true;
+}
+
 export async function insert<T extends Row>(t: Table, rows: T | T[]): Promise<void> {
   const list = Array.isArray(rows) ? rows : [rows];
+  if (list.some(tooBig)) return;
   record({ kind: 'insert', t, rows: clone(list) });
   await rawUpsert(t, list, true);
 }
 
 export async function update(t: Table, id: string, patch: Record<string, any>): Promise<void> {
+  if (tooBig(patch)) return;
   const before = (cache[t] ?? []).find((r) => r.id === id);
   const prev = before ? Object.fromEntries(Object.keys(patch).map((k) => [k, clone(before[k] ?? null)])) : null;
   record({ kind: 'update', t, id, patch: clone(patch), prev });

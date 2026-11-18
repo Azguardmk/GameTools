@@ -112,7 +112,20 @@ export function CharacterProfile({ c, onClose, onOpen }: { c: Definition; onClos
                 <Icon name="plus" size={14} /> {c.extra?.image ? 'Replace image' : 'Upload image'}
                 <input type="file" accept="image/*" hidden onChange={(e) => useFile(e.target.files?.[0])} />
               </label>
-              <TextField value={c.extra?.image?.startsWith('data:') ? '' : c.extra?.image ?? ''} label="Image link" placeholder="…or paste an image link (https://…)" onCommit={(v) => set({ image: v.trim() })} />
+              <TextField
+                value={c.extra?.image?.startsWith('data:') ? '' : c.extra?.image ?? ''}
+                label="Image link"
+                placeholder="…or paste an image link (https://…)"
+                onCommit={async (v) => {
+                  const t = v.trim();
+                  // A pasted picture (data:…) is shrunk too, so it never bloats the shared data.
+                  if (t.startsWith('data:')) {
+                    const blob = await fetch(t).then((r) => r.blob());
+                    return useFile(new File([blob], 'pasted', { type: blob.type || 'image/png' }));
+                  }
+                  set({ image: t });
+                }}
+              />
               {c.extra?.image && (
                 <button type="button" className="btn ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => set({ image: '' })}>
                   Remove image

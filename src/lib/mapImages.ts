@@ -28,5 +28,10 @@ export async function uploadMapImage(regionId: string, file: File): Promise<stri
     const { error } = await supabase.storage.from('maps').upload(path, file, { upsert: true, contentType: file.type });
     if (!error) return supabase.storage.from('maps').getPublicUrl(path).data.publicUrl;
   }
-  return shrink(file, 2400, 0.82);
+  // Kept with the region: shrink until it is small enough to store (the data layer refuses very large rows).
+  for (const [max, q] of [[2000, 0.8], [1600, 0.75], [1280, 0.7], [1024, 0.65]] as const) {
+    const url = await shrink(file, max, q);
+    if (url.length < 380_000) return url;
+  }
+  return shrink(file, 800, 0.6);
 }
