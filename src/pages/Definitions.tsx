@@ -17,7 +17,8 @@ export default function DefinitionsPage() {
     { name: 'TEAM', items: [{ key: 'members', title: 'Team members', n: members.list.length }] },
     ...(['World', 'Player factions', 'Items', 'Quests', 'Tasks'] as const).map((g) => ({
       name: g.toUpperCase(),
-      items: LISTS.filter((l) => l.group === g).map((l) => ({ key: l.key as View, title: l.title, n: defs.list(l.key).length })),
+      // Characters / NPCs have their own NPCs tab.
+      items: LISTS.filter((l) => l.group === g && l.key !== 'character').map((l) => ({ key: l.key as View, title: l.title, n: defs.list(l.key).length })),
     })),
   ];
 
@@ -64,7 +65,7 @@ export default function DefinitionsPage() {
 }
 
 /** How many things use each definition / member id. */
-function useUsage() {
+export function useUsage() {
   const { rows: items } = useTable<Item>('items');
   const { rows: nodes } = useTable<QuestNode>('quest_nodes');
   const { rows: tasks } = useTable<Task>('tasks');
@@ -105,7 +106,7 @@ function useUsage() {
   }, [items, nodes, tasks, defRows]);
 }
 
-function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, number> }) {
+export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, number> }) {
   const meta = LISTS.find((l) => l.key === listKey)!;
   const defs = useDefinitions();
   const rows = defs.list(listKey);
@@ -138,7 +139,60 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
 
   const [profileId, setProfileId] = useState<string | null>(null);
   const profile = profileId ? rows.find((r) => r.id === profileId) : undefined;
-  const cols = `48px 64px minmax(180px, 1.4fr) minmax(140px, 1fr) ${meta.extras.map((x) => (x.ref ? '170px' : x.options ? '130px' : '120px')).join(' ')} 110px ${meta.profile ? '96px ' : ''}48px`;
+  // Column widths: drag the edge of a column header to resize; remembered per list in this browser.
+  const widthKey = 'earthlings-tools:cols:' + listKey;
+  const [widths, setWidths] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(widthKey) || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const saveWidths = (w: Record<string, number>) => {
+    setWidths(w);
+    try {
+      localStorage.setItem(widthKey, JSON.stringify(w));
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  const extraDefault = (x: (typeof meta.extras)[number]) => (x.ref ? 170 : x.options ? 130 : 120);
+  const colW = (key: string, fallback: string) => (widths[key] ? widths[key] + 'px' : fallback);
+  const cols = `48px 64px ${colW('name', 'minmax(180px, 1.4fr)')} ${colW('enum', 'minmax(140px, 1fr)')} ${meta.extras.map((x) => colW(x.key, extraDefault(x) + 'px')).join(' ')} ${colW('used', '110px')} ${meta.profile ? '96px ' : ''}48px`;
+  const rowMinWidth = 48 + 64 + (widths.name ?? 180) + (widths.enum ?? 140) + meta.extras.reduce((n, x) => n + (widths[x.key] ?? extraDefault(x)), 0) + (widths.used ?? 110) + (meta.profile ? 96 : 0) + 48;
+  /** Drag handle on the right edge of a header cell. */
+  const resizer = (key: string) => (
+    <span
+      className="col-resize"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Drag to resize this column (double-click to reset)"
+      title="Drag to resize · double-click to reset"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        const cell = (e.currentTarget as HTMLElement).parentElement!;
+        const startX = e.clientX;
+        const startW = cell.getBoundingClientRect().width;
+        let next = { ...widths };
+        const move = (ev: PointerEvent) => {
+          next = { ...widths, [key]: Math.max(60, Math.round(startW + ev.clientX - startX)) };
+          setWidths(next);
+        };
+        const up = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          saveWidths(next);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+      }}
+      onDoubleClick={() => {
+        const next = { ...widths };
+        delete next[key];
+        saveWidths(next);
+      }}
+    />
+  );
   /** Picking a district also fills in its region. */
   const setExtra = (r: Definition, key: string, value: string) => {
     const next: Record<string, unknown> = { ...r.extra, [key]: value };
@@ -164,15 +218,18 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
       </div>
 
       <div style={{ border: '1px solid var(--line)', borderRadius: 12, background: 'var(--row)', overflow: 'auto' }}>
-        <div className="drow head" style={{ gridTemplateColumns: cols }}>
+        <div className="drow head" style={{ gridTemplateColumns: cols, minWidth: rowMinWidth }}>
           <div />
           <div>COLOR</div>
-          <div>NAME</div>
-          <div>UE ENUM KEY</div>
+          <div className="th-resize">NAME{resizer('name')}</div>
+          <div className="th-resize">UE ENUM KEY{resizer('enum')}</div>
           {meta.extras.map((x) => (
-            <div key={x.key}>{x.label.toUpperCase()}</div>
+            <div key={x.key} className="th-resize">
+              {x.label.toUpperCase()}
+              {resizer(x.key)}
+            </div>
           ))}
-          <div>USED BY</div>
+          <div className="th-resize">USED BY{resizer('used')}</div>
           {meta.profile && <div />}
           <div />
         </div>
@@ -182,7 +239,7 @@ function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, n
             <div
               key={r.id}
               className={'drow' + (dragFrom === i ? ' dragging' : '') + (dropAt === i && dragFrom !== null && dragFrom !== i ? (dragFrom < i ? ' drop-below' : ' drop-above') : '')}
-              style={{ gridTemplateColumns: cols }}
+              style={{ gridTemplateColumns: cols, minWidth: rowMinWidth }}
               onDragOver={(e) => {
                 if (dragFrom === null) return;
                 e.preventDefault();
@@ -406,3 +463,13 @@ function MembersEditor({ usage }: { usage: Map<string, number> }) {
 }
 
 export type { Definition };
+
+/** NPCs tab: the Characters / NPCs list with profiles, on its own page. */
+export function NpcsPage() {
+  const usage = useUsage();
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ListEditor listKey="character" usage={usage} />
+    </section>
+  );
+}

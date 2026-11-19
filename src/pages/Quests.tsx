@@ -1404,7 +1404,7 @@ function QuestPanel({ node, edges, onDelete, onOpen }: { node: QuestNode; edges:
 // ---------- small helpers ----------
 
 /**
- * Pick a character from the full list, or type a new name to add one to Definitions → Characters / NPCs.
+ * Pick a character from the full list, or type a new name to add one to the NPCs tab.
  * The list always shows every character, even when one is already chosen.
  */
 function CharacterField({ value, fallback, label, onChange }: { value: string | null; fallback?: string; label: string; onChange: (id: string | null, name: string) => void }) {

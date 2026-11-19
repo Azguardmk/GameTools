@@ -5,7 +5,7 @@ A shared web tool for the Earthlings team:
 - **Tasks**: a task board with theme groups, pinned columns, a checkbox to mark tasks done, assignee badges and filters.
 - **Quests**: a node editor for quest chains, inspired by narrative tools like Arcweave and Drafft. Node types are Start, Quest, Dialogue (a character's line, with player replies as links), Choice, Condition (checks a story variable and leaves through Yes or No), Set variable, Quest from another chain, End (success, failure or abandoned) and Note. **Play mode** walks through a chain like a player, running conditions and variable changes as it goes. There are problem checks too, and it exports the full flow as JSON for Unreal.
 - **Quest map**: a flow chart of whole quest chains (coloured by quest type) with Start, End, AND, OR, Pick one and Go back nodes, coloured links with arrows, and reward totals per chain for balancing.
-- **Map**: one map per level (region) with every NPC as a star in their colour. NPC profiles (Definitions → Characters / NPCs → Profile) hold their portrait, looks, story, relations and map location.
+- **Map**: one map per level (region) with every NPC as a star in their colour. NPC profiles (NPCs tab → Profile) hold their portrait, looks, story, relations and map location.
 - **Items**: an item database with categories, rarities, crafting recipes, blueprints, how to get each item and where it's used. It exports a CSV for an Unreal DataTable.
 - **Definitions**: the lists everything else picks from (team members, regions, districts, characters, story variables, item categories, rarities, quest types and so on). They export as JSON enums.
 

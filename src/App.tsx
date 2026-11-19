@@ -11,7 +11,7 @@ import TasksPage from './pages/Tasks';
 import QuestsPage from './pages/Quests';
 import QuestMapPage from './pages/QuestMap';
 import ItemsPage from './pages/Items';
-import DefinitionsPage from './pages/Definitions';
+import DefinitionsPage, { NpcsPage } from './pages/Definitions';
 import MapPage from './pages/MapPage';
 
 export default function App() {
@@ -49,6 +49,7 @@ export default function App() {
           <NavLink to="/map">Map</NavLink>
           <NavLink to="/items">Items</NavLink>
           <NavLink to="/definitions">Definitions</NavLink>
+          <NavLink to="/npcs">NPCs</NavLink>
         </nav>
         <div className="spacer" />
         {full && (
@@ -83,6 +84,7 @@ export default function App() {
         <Route path="/map" element={<MapPage />} />
         <Route path="/items" element={<ItemsPage />} />
         <Route path="/definitions" element={<DefinitionsPage />} />
+        <Route path="/npcs" element={<NpcsPage />} />
         <Route path="*" element={<Navigate to="/tasks" replace />} />
       </Routes>
       </PageGuard>

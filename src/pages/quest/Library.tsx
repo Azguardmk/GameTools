@@ -93,7 +93,7 @@ export function Library({ onPick, open, onToggle, activeNpc }: { onPick: (d: Lib
                   </span>
                 </button>
               ))}
-        {tab === 'npc' && npcs.length === 0 && <span className="muted" style={{ fontSize: 12 }}>No characters yet. Add them under Definitions → Characters / NPCs.</span>}
+        {tab === 'npc' && npcs.length === 0 && <span className="muted" style={{ fontSize: 12 }}>No characters yet. Add them in the NPCs tab.</span>}
         {tab !== 'npc' && list.length === 0 && <span className="muted" style={{ fontSize: 12 }}>{tab === 'currency' ? 'No items in a “Currency” category yet.' : 'No items yet.'}</span>}
       </div>
       <span className="muted" style={{ fontSize: 11, lineHeight: 1.45 }}>

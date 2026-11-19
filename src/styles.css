@@ -458,3 +458,10 @@ table.balance tfoot td { font-weight: 700; border-top: 1px solid var(--line-2); 
 .icat-sep { display: flex; align-items: center; gap: 8px; padding: 14px 14px 6px; border-bottom: 1px solid var(--line-2); border-top: 1px solid var(--line-2); background: #191714; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); min-width: 1118px; }
 .icat-sep > span { width: 10px; height: 10px; border-radius: 3px; }
 .icat-sep > em { font-style: normal; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+
+/* Resizable columns in definition lists */
+.th-resize { position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-resize { position: absolute; top: 4px; bottom: 4px; right: 0; width: 9px; cursor: col-resize; touch-action: none; }
+.col-resize::after { content: ''; position: absolute; top: 4px; bottom: 4px; right: 3px; width: 2px; border-radius: 1px; background: #3a362f; }
+.col-resize:hover::after { background: var(--accent); }
+.drow > .cell { min-width: 0; }
