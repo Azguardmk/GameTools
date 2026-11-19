@@ -465,3 +465,9 @@ table.balance tfoot td { font-weight: 700; border-top: 1px solid var(--line-2); 
 .col-resize::after { content: ''; position: absolute; top: 4px; bottom: 4px; right: 3px; width: 2px; border-radius: 1px; background: #3a362f; }
 .col-resize:hover::after { background: var(--accent); }
 .drow > .cell { min-width: 0; }
+
+/* Task search */
+.task-search { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 6px 0 10px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--bg); color: var(--muted); min-width: 260px; }
+.task-search:focus-within { border-color: var(--accent); color: var(--text-2); }
+.task-search input { flex: 1; min-width: 0; height: 100%; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 14px; }
+.task-search input::-webkit-search-cancel-button { display: none; }

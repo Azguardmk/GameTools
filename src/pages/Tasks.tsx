@@ -12,6 +12,22 @@ export default function TasksPage() {
   const members = useMembers();
   const [who, setWho] = useState<string>('all');
   const [hideDone, setHideDone] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const searching = terms.length > 0;
+  // Ctrl/Cmd+F jumps to the task search.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [addingGroup, setAddingGroup] = useState(false);
   const [newGroup, setNewGroup] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#6fb3d6');
@@ -22,8 +38,25 @@ export default function TasksPage() {
   const priorities = defs.list('task_priority');
   const statuses = defs.list('task_status');
 
+  /** Text a search looks through: title, notes, group, people, priority and status. */
+  const haystack = (t: Task) =>
+    [
+      t.title,
+      t.notes,
+      groups.find((g) => g.id === t.group_id)?.name,
+      ...t.assignees.map((id) => members.get(id)?.name),
+      defs.get(t.priority)?.name,
+      defs.get(t.status)?.name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
   const visible = (t: Task) => {
     if (hideDone && t.done) return false;
+    if (searching) {
+      const h = haystack(t);
+      if (!terms.every((w) => h.includes(w))) return false;
+    }
     if (who === 'all') return true;
     if (who === 'none') return t.assignees.length === 0;
     return t.assignees.includes(who);
@@ -81,6 +114,31 @@ export default function TasksPage() {
           Unassigned
         </button>
         <div className="spacer" />
+        <div className="task-search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            placeholder="Search tasks"
+            aria-label="Search tasks"
+          />
+          {searching && (
+            <>
+              <span className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                {tasks.filter(visible).length} found
+              </span>
+              <button type="button" className="icon-btn" aria-label="Clear search" onClick={() => setQuery('')}>
+                <Icon name="x" size={14} />
+              </button>
+            </>
+          )}
+        </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 36, fontSize: 13, cursor: 'pointer' }}>
           <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--accent)' }} />
           Hide completed
@@ -103,9 +161,20 @@ export default function TasksPage() {
           <div />
         </div>
 
+        {searching && tasks.filter(visible).length === 0 && (
+          <div className="empty" style={{ padding: 24 }}>
+            No tasks match “{query.trim()}”.{' '}
+            <button type="button" className="btn ghost small" onClick={() => setQuery('')}>
+              Clear search
+            </button>
+          </div>
+        )}
         {groups.map((g) => {
           const all = tasks.filter((t) => t.group_id === g.id).sort((a, b) => a.sort - b.sort);
           const shown = all.filter(visible);
+          // While searching, groups without a match are hidden and the others open up.
+          if (searching && shown.length === 0) return null;
+          const open = !g.collapsed || searching;
           return (
             <div key={g.id}>
               <div className="ghead">
@@ -126,7 +195,7 @@ export default function TasksPage() {
                 <GroupMenu group={g} taskCount={all.length} />
                 </div>
               </div>
-              {!g.collapsed && (
+              {open && (
                 <>
                   {shown.map((t) => (
                     <TaskRow key={t.id} t={t} n={all.indexOf(t) + 1} groupColor={g.color} priorities={priorities} statuses={statuses} members={members} />
