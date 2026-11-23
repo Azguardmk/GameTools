@@ -211,6 +211,10 @@ export interface ListMeta {
   profile?: boolean;
 }
 
+/** Kinds of location. Towns, Villages, Water Towns and Cabins are the plot settlements on the Europe map. */
+export const LOCATION_KINDS = ['Place', 'Town', 'Village', 'Water Town', 'Cabin', 'City', 'Landmark'] as const;
+export type LocationKind = (typeof LOCATION_KINDS)[number];
+
 export const LISTS: ListMeta[] = [
   { key: 'faction_leader', group: 'Player factions', title: 'Faction leaders', enumName: 'E_FactionLeader',
     description: 'The leaders of the factions players can join. Each leader’s colour is used for their faction.',
@@ -235,8 +239,8 @@ export const LISTS: ListMeta[] = [
     ],
     profile: true },
   { key: 'location', group: 'World', title: 'Locations', enumName: 'E_Location',
-    description: 'Named places inside a district (a square, a market, the train station…). NPCs and buildings can be placed at a location.',
-    extras: [{ key: 'region', label: 'Region', ref: 'region' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'notes', label: 'Notes', placeholder: 'What is here' }] },
+    description: 'Named places: a square, a market, the train station — and on the Europe map the Towns, Villages, Water Towns and Cabins. NPCs and buildings can be placed at a location.',
+    extras: [{ key: 'kind', label: 'Type', options: [...LOCATION_KINDS] }, { key: 'number', label: 'No.', placeholder: '#' }, { key: 'region', label: 'Region', ref: 'region' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'notes', label: 'Notes', placeholder: 'What is here' }] },
   { key: 'building', group: 'World', title: 'Buildings', enumName: 'E_Building',
     description: 'Buildings NPCs live or work in. Each building can sit at a location.',
     extras: [{ key: 'location', label: 'Location', ref: 'location' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'notes', label: 'Notes', placeholder: 'e.g. Clock shop, 3 floors' }] },

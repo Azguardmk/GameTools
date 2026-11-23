@@ -299,7 +299,7 @@ function LocationSection({ c, set }: { c: Definition; set: (patch: Record<string
         <span className="muted" style={{ fontSize: 13 }}>Pick a region to place this NPC on its map.</span>
       ) : region.extra?.map ? (
         <>
-          <MapView image={region.extra.map} height={320} pins={pin ? [{ id: c.id, x: pin.x, y: pin.y, color: '#e0303c', label: c.name, active: true }] : []} onPlace={(x, y) => set({ pin: { region: region.id, x, y } })} onMove={(_id, x, y) => set({ pin: { region: region.id, x, y } })} starSize={20} />
+          <MapView image={region.extra.map} height={320} areaOpacity={0.18} areas={defs.list('district').filter((d) => d.extra?.region === region.id && (d.extra?.shape?.points?.length ?? 0) >= 3).map((d) => ({ id: d.id, points: d.extra.shape.points, more: d.extra.shape.more, smooth: !!d.extra.shape.smooth, color: d.color, label: d.name }))} pins={pin ? [{ id: c.id, x: pin.x, y: pin.y, color: '#e0303c', label: c.name, active: true }] : []} onPlace={(x, y) => set({ pin: { region: region.id, x, y } })} onMove={(_id, x, y) => set({ pin: { region: region.id, x, y } })} starSize={20} />
           <div className="list-row" style={{ fontSize: 12 }}>
             <span className="muted grow">{pin ? 'Click the map to move the red star, or drag it. Scroll to zoom, drag to move around.' : 'Click the map to place this NPC (a red star).'}</span>
             {pin && (
