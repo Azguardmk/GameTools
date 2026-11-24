@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { group, insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions, useMembers } from '../lib/hooks';
 import { LISTS, enumKey, type Definition, type Item, type ListKey, type QuestNode, type Task } from '../lib/types';
@@ -109,7 +109,16 @@ export function useUsage() {
 export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, number> }) {
   const meta = LISTS.find((l) => l.key === listKey)!;
   const defs = useDefinitions();
-  const rows = defs.list(listKey);
+  // Districts and locations are grouped by region (New Paris, Europe…) with a separator between groups.
+  const byRegion = listKey === 'district' || listKey === 'location';
+  const regionOf = (r: Definition): string => r.extra?.region || defs.get(r.extra?.district)?.extra?.region || '';
+  const rows = useMemo(() => {
+    const list = defs.list(listKey);
+    if (!byRegion) return list;
+    const order = new Map(defs.list('region').map((r, i) => [r.id, i]));
+    const rank = (r: Definition) => order.get(regionOf(r)) ?? 9999;
+    return [...list].sort((a, b) => rank(a) - rank(b) || a.sort - b.sort);
+  }, [defs, listKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [name, setName] = useState('');
   const [color, setColor] = useState('#6fb3d6');
 
@@ -126,6 +135,7 @@ export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<st
   /** Moves the entry at `from` to position `to` and renumbers the list (one undo step). */
   const reorder = (from: number, to: number) => {
     if (from === to || to < 0 || to >= rows.length) return;
+    if (byRegion && regionOf(rows[from]) !== regionOf(rows[to])) return; // stay inside the region group
     const next = [...rows];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
@@ -235,7 +245,17 @@ export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<st
         </div>
         {rows.map((r, i) => {
           const used = usage.get(r.id) ?? 0;
+          const newGroup = byRegion && (i === 0 || regionOf(rows[i - 1]) !== regionOf(r));
+          const reg = newGroup ? defs.get(regionOf(r)) : undefined;
           return (
+            <Fragment key={r.id}>
+            {newGroup && (
+              <div className="region-sep" role="presentation" style={{ minWidth: rowMinWidth, borderTopColor: reg?.color ?? undefined }}>
+                <span style={{ background: reg?.color ?? '#5a544a' }} />
+                {reg?.name ?? 'No region'}
+                <em>{rows.filter((x) => regionOf(x) === regionOf(r)).length}</em>
+              </div>
+            )}
             <div
               key={r.id}
               className={'drow' + (dragFrom === i ? ' dragging' : '') + (dropAt === i && dragFrom !== null && dragFrom !== i ? (dragFrom < i ? ' drop-below' : ' drop-above') : '')}
@@ -364,6 +384,7 @@ export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<st
                 </button>
               </span>
             </div>
+            </Fragment>
           );
         })}
         {rows.length === 0 && <div className="empty">This list is empty. Add the first entry below.</div>}

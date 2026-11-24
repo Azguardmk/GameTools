@@ -490,3 +490,9 @@ table.balance tfoot td { font-weight: 700; border-top: 1px solid var(--line-2); 
 .task-search:focus-within { border-color: var(--accent); color: var(--text-2); }
 .task-search input { flex: 1; min-width: 0; height: 100%; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 14px; }
 .task-search input::-webkit-search-cancel-button { display: none; }
+
+/* Region groups in Definitions → Districts / Locations */
+.region-sep { display: flex; align-items: center; gap: 10px; padding: 18px 14px 8px; margin-top: 6px; border-top: 3px solid var(--line-2); border-bottom: 1px solid var(--line-2); background: #191714; font: 800 13px 'Space Grotesk', sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+.region-sep:first-of-type { margin-top: 0; }
+.region-sep > span { width: 12px; height: 12px; border-radius: 3px; }
+.region-sep > em { font-style: normal; font-weight: 600; font-size: 12px; color: var(--muted); letter-spacing: 0; }
