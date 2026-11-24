@@ -77,15 +77,20 @@ if (typeof window !== 'undefined') {
 // ---------- loading & live updates ----------
 const subscribed = new Set<Table>();
 
+const retries: Partial<Record<Table, number>> = {};
 async function fetchTable(t: Table) {
   if (!supabase) {
     cache[t] = lsRead(t);
   } else {
     const { data, error } = await supabase.from(t).select('*');
     if (error) {
-      reportError(error);
+      // The server can be briefly unreachable (e.g. 520/522/525 from the gateway). Keep what we have and try again.
+      const n = (retries[t] = (retries[t] ?? 0) + 1);
+      if (n === 1) reportError(error);
+      setTimeout(() => fetchTable(t), Math.min(30000, 1500 * 2 ** (n - 1)));
       return;
     }
+    retries[t] = 0;
     cache[t] = data as Row[];
   }
   loaded.add(t);

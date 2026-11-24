@@ -109,14 +109,24 @@ export function useUsage() {
 export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<string, number> }) {
   const meta = LISTS.find((l) => l.key === listKey)!;
   const defs = useDefinitions();
-  // Districts and locations are grouped by region (New Paris, Europe…) with a separator between groups.
+  // Districts and locations are grouped by region (New Paris, Europe…); NPCs put the faction leaders first.
+  // Each group gets a bold separator.
   const byRegion = listKey === 'district' || listKey === 'location';
   const regionOf = (r: Definition): string => r.extra?.region || defs.get(r.extra?.district)?.extra?.region || '';
+  const leaderNames = new Set(defs.list('faction_leader').map((l) => l.name.toLowerCase()));
+  const isLeader = (r: Definition) => /^leader of /i.test(r.extra?.role ?? '') || leaderNames.has(r.name.toLowerCase()) || leaderNames.has(r.name.toLowerCase().replace(/^captain /, ''));
+  const grouped = byRegion || listKey === 'character';
+  const groupOf = (r: Definition): string => (listKey === 'character' ? (isLeader(r) ? 'leaders' : 'npcs') : regionOf(r));
+  const groupInfo = (key: string): { name: string; color?: string } => {
+    if (listKey === 'character') return { name: key === 'leaders' ? 'Faction Leaders' : 'NPCs', color: key === 'leaders' ? '#c294d6' : '#8f897d' };
+    const reg = defs.get(key);
+    return { name: reg?.name ?? 'No region', color: reg?.color };
+  };
   const rows = useMemo(() => {
     const list = defs.list(listKey);
-    if (!byRegion) return list;
+    if (!grouped) return list;
     const order = new Map(defs.list('region').map((r, i) => [r.id, i]));
-    const rank = (r: Definition) => order.get(regionOf(r)) ?? 9999;
+    const rank = (r: Definition) => (listKey === 'character' ? (isLeader(r) ? 0 : 1) : order.get(regionOf(r)) ?? 9999);
     return [...list].sort((a, b) => rank(a) - rank(b) || a.sort - b.sort);
   }, [defs, listKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [name, setName] = useState('');
@@ -135,7 +145,7 @@ export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<st
   /** Moves the entry at `from` to position `to` and renumbers the list (one undo step). */
   const reorder = (from: number, to: number) => {
     if (from === to || to < 0 || to >= rows.length) return;
-    if (byRegion && regionOf(rows[from]) !== regionOf(rows[to])) return; // stay inside the region group
+    if (grouped && groupOf(rows[from]) !== groupOf(rows[to])) return; // stay inside the group
     const next = [...rows];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
@@ -245,15 +255,15 @@ export function ListEditor({ listKey, usage }: { listKey: ListKey; usage: Map<st
         </div>
         {rows.map((r, i) => {
           const used = usage.get(r.id) ?? 0;
-          const newGroup = byRegion && (i === 0 || regionOf(rows[i - 1]) !== regionOf(r));
-          const reg = newGroup ? defs.get(regionOf(r)) : undefined;
+          const newGroup = grouped && (i === 0 || groupOf(rows[i - 1]) !== groupOf(r));
+          const info = newGroup ? groupInfo(groupOf(r)) : undefined;
           return (
             <Fragment key={r.id}>
-            {newGroup && (
-              <div className="region-sep" role="presentation" style={{ minWidth: rowMinWidth, borderTopColor: reg?.color ?? undefined }}>
-                <span style={{ background: reg?.color ?? '#5a544a' }} />
-                {reg?.name ?? 'No region'}
-                <em>{rows.filter((x) => regionOf(x) === regionOf(r)).length}</em>
+            {newGroup && info && (
+              <div className="region-sep" role="presentation" style={{ minWidth: rowMinWidth, borderTopColor: info.color }}>
+                <span style={{ background: info.color ?? '#5a544a' }} />
+                {info.name}
+                <em>{rows.filter((x) => groupOf(x) === groupOf(r)).length}</em>
               </div>
             )}
             <div
