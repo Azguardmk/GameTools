@@ -496,3 +496,34 @@ table.balance tfoot td { font-weight: 700; border-top: 1px solid var(--line-2); 
 .region-sep:first-of-type { margin-top: 0; }
 .region-sep > span { width: 12px; height: 12px; border-radius: 3px; }
 .region-sep > em { font-style: normal; font-weight: 600; font-size: 12px; color: var(--muted); letter-spacing: 0; }
+
+/* ---------- Game data (imported from Unreal) ---------- */
+:root { --ue: #f29a4a; }
+.ue-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ue); flex: none; box-shadow: 0 0 0 2px #f29a4a33; }
+.ue-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 9px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; color: var(--ue); background: #f29a4a22; border: 1px solid #f29a4a55; white-space: nowrap; }
+.ue-pill.ok { color: #9fcf8c; background: #8fbf7418; border-color: #8fbf7440; }
+.ue-pill.gone { color: var(--danger); background: #f0a08322; border-color: var(--danger-line); }
+.btn.ue-btn { border-color: #f29a4a66; color: #f6c08c; }
+.btn.ue-btn[aria-pressed='true'] { background: #f29a4a26; border-color: var(--ue); }
+.btn[aria-pressed='true'] { border-color: var(--accent); background: #2e2a24; }
+.ue-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 3px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; white-space: nowrap; }
+.ue-chip em { font-style: normal; color: var(--muted); font-size: 12px; }
+.ue-chip.unused { border-color: #f29a4a55; }
+.ue-box { gap: 6px; border-color: var(--line-2); }
+.ue-box.unused { border-color: #f29a4a66; background: #f29a4a0d; }
+.ue-box.missing { opacity: 0.8; }
+.ue-note { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: #f6c08c; line-height: 1.4; }
+.ue-kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px; font-size: 12.5px; line-height: 1.4; }
+.ue-kv > span:last-child { overflow-wrap: anywhere; }
+.ue-diff { font-style: normal; color: var(--ue); font-weight: 600; cursor: help; }
+.gd-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.gd-tabs a { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 18px; border: 1px solid var(--line-2); color: var(--text); text-decoration: none; font-size: 13px; font-weight: 500; }
+.gd-tabs a.active { background: #2e2a24; border-color: var(--accent); }
+.gd-tabs .count { font-size: 11px; color: var(--muted); }
+.ue-count { min-width: 18px; padding: 0 5px; border-radius: 9px; background: #f29a4a33; color: var(--ue); font-size: 11px; font-weight: 700; text-align: center; }
+.gd-list { display: flex; flex-direction: column; gap: 14px; padding-bottom: 40px; }
+.gd-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-x: auto; }
+.gd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gd-table th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-2); padding: 6px 8px; border-bottom: 1px solid var(--line-2); text-transform: uppercase; }
+.gd-table td { padding: 5px 8px; border-bottom: 1px solid #22201d; vertical-align: middle; }
+.gd-table tr:last-child td { border-bottom: none; }

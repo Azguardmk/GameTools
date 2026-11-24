@@ -7,6 +7,7 @@ A shared web tool for the Earthlings team:
 - **Quest map**: a flow chart of whole quest chains (coloured by quest type) with Start, End, AND, OR, Pick one and Go back nodes, coloured links with arrows, and reward totals per chain for balancing.
 - **Map**: one map per level (region) with every NPC as a star in their colour. NPC profiles (NPCs tab → Profile) hold their portrait, looks, story, relations and map location.
 - **Items**: an item database with categories, rarities, crafting recipes, blueprints, how to get each item and where it's used. It exports a CSV for an Unreal DataTable.
+- **Game data**: what the Unreal project's managers hold — recipes, drop tables, loot tables, shops and equipment — imported from the `.uasset` files with `tools/ue-sync`. Items that came from Unreal but aren't used in any written questline get an orange **UE · not in quests** marker (here and on the Items page), so they can be fixed one by one.
 - **Definitions**: the lists everything else picks from (team members, regions, districts, characters, story variables, item categories, rarities, quest types and so on). They export as JSON enums.
 
 It's built with React, Vite and React Flow, hosted on GitHub Pages, with data in Supabase.
@@ -45,6 +46,7 @@ The publishable key in the code is meant to be public. The row-level security po
 | `items` | Items; `sources` and `recipe` are JSON; `teaches` links a blueprint to the item it teaches |
 | `quest_chains`, `quest_nodes`, `quest_edges` | The quest graph per chain; `quest_chains.type` is its quest type |
 | `map_nodes`, `map_edges` | The Quest map flow chart (chains and flow nodes, and the links between them) |
+| `ue_tables` | Recipes, drop tables, loot tables and shops imported from Unreal (`kind`, `code`, `data`, `notes`). Items keep their Unreal asset in `items.ue_asset` and its values in `items.ue`. Set up by `supabase/ue_import.sql`; see `tools/ue-sync/README.md` |
 
 Level map images live in `public/maps/` (served with the site) and are linked from a region's `extra.map`. NPC map pins are in a character's `extra.pin` (`{ region, x, y }`, x/y from 0 to 1).
 

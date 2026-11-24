@@ -8,7 +8,8 @@ export type Table =
   | 'quest_nodes'
   | 'quest_edges'
   | 'map_nodes'
-  | 'map_edges';
+  | 'map_edges'
+  | 'ue_tables';
 
 export const TABLES: Table[] = [
   'members',
@@ -21,6 +22,7 @@ export const TABLES: Table[] = [
   'quest_edges',
   'map_nodes',
   'map_edges',
+  'ue_tables',
 ];
 
 export interface Member {
@@ -91,6 +93,51 @@ export interface Item {
   recipe: Recipe | null;
   teaches: string | null;
   sort: number; // position in the item list (set with the up / down arrows)
+  /** Unreal asset name (IDA_Steak…) when the item exists in the Unreal project. */
+  ue_asset?: string | null;
+  /** The item as it is in Unreal, from the last import (Game data → Import from Unreal). */
+  ue?: UeItem | null;
+}
+
+export interface UeItem {
+  name: string;
+  class: string;
+  path: string;
+  category: string;
+  ue_category: string;
+  rarity: string;
+  tier: number;
+  stack: number;
+  description: string;
+  icon: string | null;
+  nft: boolean;
+  single_use: boolean;
+  bound: boolean;
+  ability: string | null;
+  item_id: number | null;
+  slot: string | null;
+  props: Record<string, any>;
+  /** Set when the asset was not in the last import. */
+  removed?: boolean;
+}
+
+/** Recipes, drop tables, loot tables and shops as they are in Unreal. Items inside are Unreal asset names. */
+export type UeKind = 'recipe' | 'drop_table' | 'loot_table' | 'shop';
+export interface UeRecipe { code: string; table: string; result: string; qty: number; station: string; seconds: number; field: boolean; ingredients: { item: string; qty: number }[] }
+export interface UeDropTable { code: string; path: string; entries: { item: string; chance: number; min: number; max: number; legacy_quest?: string | null }[] }
+export interface UeLootTable {
+  code: string; path: string; type: string;
+  pools: { name: string; chance: number; min_rolls: number; max_rolls: number; unique: boolean; entries: { row?: string; item: string; weight: number; min: number; max: number; node_material?: string | null }[] }[];
+}
+export interface UeShop { code: string; path: string; name: string; vendors: string[]; entries: { item: string; buy: number; sell: number; can_buy: boolean; can_sell: boolean; currency: string | null }[] }
+export interface UeTable {
+  id: string;
+  kind: UeKind;
+  code: string;
+  name: string;
+  data: any;
+  notes: string;
+  imported_at: string;
 }
 
 export interface QuestChain {

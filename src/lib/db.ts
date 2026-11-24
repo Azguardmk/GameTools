@@ -158,6 +158,7 @@ const NOUN: Record<Table, [string, string]> = {
   quest_edges: ['link', 'links'],
   map_nodes: ['map node', 'map nodes'],
   map_edges: ['map link', 'map links'],
+  ue_tables: ['game data entry', 'game data entries'],
 };
 const noun = (t: Table, n: number) => (n === 1 ? NOUN[t][0] : `${n} ${NOUN[t][1]}`);
 

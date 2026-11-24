@@ -286,6 +286,7 @@ export function buildSeed(): Record<Table, Row[]> {
     quest_chains,
     quest_nodes,
     quest_edges,
+    ue_tables: [],
   };
 }
 

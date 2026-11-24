@@ -3,6 +3,8 @@ import { insert, newId, remove, update, useTable } from '../lib/db';
 import { download, useDefinitions } from '../lib/hooks';
 import { enumKey, type Item, type QuestNode, type Recipe } from '../lib/types';
 import { DefSelect, Icon, TextField } from '../components/ui';
+import { useGameData, type GameData } from '../lib/gameData';
+import { UeBadge, UeItemPanel } from '../components/gameData';
 
 function mono(name: string) {
   const w = name.replace(/^Blueprint:\s*/i, '').split(/\s+/).filter(Boolean);
@@ -27,6 +29,8 @@ export default function ItemsPage() {
   const [query, setQuery] = useState('');
   const [selId, setSelId] = useState<string | null>(null);
   const [onlyProblems, setOnlyProblems] = useState(false);
+  const [ueFilter, setUeFilter] = useState<'off' | 'unused' | 'notInUe'>('off');
+  const gd = useGameData();
 
   const categories = defs.list('item_category');
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
@@ -51,7 +55,9 @@ export default function ItemsPage() {
     return { fromQuests, neededByQuests, inRecipes, taughtBy };
   }, [items, quests]);
 
-  const hasSource = (it: Item) => it.sources.length > 0 || !!it.recipe || (links.fromQuests.get(it.id)?.length ?? 0) > 0;
+  const hasSource = (it: Item) => it.sources.length > 0 || !!it.recipe || (links.fromQuests.get(it.id)?.length ?? 0) > 0 || (gd.sources.get(it.id)?.length ?? 0) > 0;
+  const ueUnused = items.filter(gd.notInQuests);
+  const notInUe = items.filter((i) => !i.ue_asset);
   const problems = items.filter((i) => !hasSource(i));
 
   // In the All tab items are grouped by category, in the order of Definitions → Item categories.
@@ -61,7 +67,8 @@ export default function ItemsPage() {
   };
   const filtered = items
     .filter((i) => (cat === 'all' ? true : i.category === cat))
-    .filter((i) => !query || (i.name + ' ' + i.code).toLowerCase().includes(query.toLowerCase()))
+    .filter((i) => !query || (i.name + ' ' + i.code + ' ' + (i.ue_asset ?? '')).toLowerCase().includes(query.toLowerCase()))
+    .filter((i) => (ueFilter === 'unused' ? gd.notInQuests(i) : ueFilter === 'notInUe' ? !i.ue_asset : true))
     .filter((i) => !onlyProblems || !hasSource(i))
     .sort((a, b) => (cat === 'all' ? catIndex(a.category) - catIndex(b.category) : 0) || byOrder(a, b));
 
@@ -149,6 +156,17 @@ export default function ItemsPage() {
           <input className="input" type="search" placeholder="Search by name or ID" value={query} onChange={(e) => setQuery(e.target.value)} style={{ paddingLeft: 36 }} />
         </label>
         <div className="spacer" />
+        {ueUnused.length > 0 && (
+          <button type="button" className="btn ue-btn" aria-pressed={ueFilter === 'unused'} onClick={() => setUeFilter(ueFilter === 'unused' ? 'off' : 'unused')}
+            title="Items imported from Unreal that no written quest gives or asks for">
+            <span className="ue-dot" /> {ueUnused.length} from Unreal, not in questlines
+          </button>
+        )}
+        {notInUe.length > 0 && (
+          <button type="button" className="btn" aria-pressed={ueFilter === 'notInUe'} onClick={() => setUeFilter(ueFilter === 'notInUe' ? 'off' : 'notInUe')} title="Items written in the tool that have no Unreal asset yet">
+            {notInUe.length} not in Unreal
+          </button>
+        )}
         {problems.length > 0 && (
           <button type="button" className="btn warn" aria-pressed={onlyProblems} onClick={() => setOnlyProblems(!onlyProblems)}>
             <Icon name="warn" /> {problems.length} item{problems.length === 1 ? ' has' : 's have'} no source
@@ -190,8 +208,8 @@ export default function ItemsPage() {
           {filtered.map((it, i) => {
             const c = defs.get(it.category);
             const r = defs.get(it.rarity);
-            const srcCount = it.sources.length + (it.recipe ? 1 : 0) + (links.fromQuests.get(it.id)?.length ?? 0);
-            const useCount = (links.inRecipes.get(it.id)?.length ?? 0) + (links.neededByQuests.get(it.id)?.length ?? 0);
+            const srcCount = it.sources.length + (it.recipe ? 1 : 0) + (links.fromQuests.get(it.id)?.length ?? 0) + (gd.sources.get(it.id)?.length ?? 0);
+            const useCount = (links.inRecipes.get(it.id)?.length ?? 0) + (links.neededByQuests.get(it.id)?.length ?? 0) + (gd.uses.get(it.id)?.length ?? 0);
             const newGroup = cat === 'all' && (i === 0 || filtered[i - 1].category !== it.category);
             const groupCount = newGroup ? filtered.filter((x) => x.category === it.category).length : 0;
             return (
@@ -218,7 +236,10 @@ export default function ItemsPage() {
                   </span>
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                     <strong style={{ fontSize: 14, color: '#f1ebdf' }}>{it.name || 'Untitled'}</strong>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>{it.code}</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {it.code}
+                      <UeBadge item={it} gd={gd} />
+                    </span>
                   </span>
                 </button>
                 <span style={{ color: '#d6cfc2' }}>{c?.name ?? '—'}</span>
@@ -238,7 +259,7 @@ export default function ItemsPage() {
           {filtered.length === 0 && <div className="empty">No items match.</div>}
         </section>
 
-        {sel ? <ItemEditor key={sel.id} it={sel} items={items} links={links} hasSource={hasSource(sel)} onDeleted={() => setSelId(null)} /> : (
+        {sel ? <ItemEditor key={sel.id} it={sel} items={items} links={links} gd={gd} hasSource={hasSource(sel)} onDeleted={() => setSelId(null)} /> : (
           <aside className="panel side"><span className="muted">No items yet. Press “New item”.</span></aside>
         )}
       </div>
@@ -253,7 +274,7 @@ type Links = {
   taughtBy: Map<string, string[]>;
 };
 
-function ItemEditor({ it, items, links, hasSource, onDeleted }: { it: Item; items: Item[]; links: Links; hasSource: boolean; onDeleted: () => void }) {
+function ItemEditor({ it, items, links, gd, hasSource, onDeleted }: { it: Item; items: Item[]; links: Links; gd: GameData; hasSource: boolean; onDeleted: () => void }) {
   const defs = useDefinitions();
   const set = (patch: Partial<Item>) => update('items', it.id, patch);
   const cat = defs.get(it.category);
@@ -276,6 +297,8 @@ function ItemEditor({ it, items, links, hasSource, onDeleted }: { it: Item; item
           <TextField value={it.code} label="Item ID" onCommit={(v) => set({ code: v.replace(/\s+/g, '') })} style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent-text)' }} />
         </div>
       </div>
+
+      <UeItemPanel item={it} gd={gd} />
 
       <div className="grid2">
         <label className="field">
@@ -404,6 +427,7 @@ function ItemEditor({ it, items, links, hasSource, onDeleted }: { it: Item; item
         ))}
         {it.recipe && <AutoRow tag="CRAFTED" color="#b9c0f0" text={`${defs.get(it.recipe.station)?.name ?? 'Crafting'} recipe`} />}
         {links.fromQuests.get(it.id)?.map((q) => <AutoRow key={q} tag="QUEST REWARD" color="#e6bd7d" text={q} />)}
+        {gd.sources.get(it.id)?.map((l, i) => <AutoRow key={'ue' + i} tag={l.tag} color={l.color} text={l.text} href={l.href} />)}
         {!hasSource && (
           <div className="warn-box">
             <Icon name="warn" /> Nothing in the game gives this item yet
@@ -418,7 +442,8 @@ function ItemEditor({ it, items, links, hasSource, onDeleted }: { it: Item; item
         <span className="section-label">USED IN</span>
         {links.inRecipes.get(it.id)?.map((n) => <AutoRow key={'r' + n} tag="RECIPE" color="#b9c0f0" text={n} />)}
         {links.neededByQuests.get(it.id)?.map((n) => <AutoRow key={'q' + n} tag="QUEST NEEDS" color="#9ccbe3" text={n} href="#/quests" />)}
-        {!links.inRecipes.get(it.id) && !links.neededByQuests.get(it.id) && <span className="muted" style={{ fontSize: 13 }}>Not used anywhere yet</span>}
+        {gd.uses.get(it.id)?.map((l, i) => <AutoRow key={'ueu' + i} tag={l.tag} color={l.color} text={l.text} href={l.href} />)}
+        {!links.inRecipes.get(it.id) && !links.neededByQuests.get(it.id) && !gd.uses.get(it.id) && <span className="muted" style={{ fontSize: 13 }}>Not used anywhere yet</span>}
       </div>
 
       <button
