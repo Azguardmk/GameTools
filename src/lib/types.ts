@@ -246,7 +246,7 @@ export const LISTS: ListMeta[] = [
     extras: [{ key: 'location', label: 'Location', ref: 'location' }, { key: 'district', label: 'District', ref: 'district' }, { key: 'notes', label: 'Notes', placeholder: 'e.g. Clock shop, 3 floors' }] },
   { key: 'variable', group: 'Quests', title: 'Story variables', enumName: 'E_StoryVariable',
     description: 'Flags and counters the story remembers, e.g. helped_guild or rep_city_watch. Conditions check them and “Set variable” nodes change them.',
-    extras: [{ key: 'type', label: 'Type', options: ['Boolean', 'Integer', 'Text'] }, { key: 'default', label: 'Starts as', placeholder: 'false / 0 / text' }] },
+    extras: [{ key: 'type', label: 'Type', options: ['Boolean', 'Integer', 'Text'] }, { key: 'default', label: 'Starts as', placeholder: 'false / 0 / text' }, { key: 'notes', label: 'Set when → effect', placeholder: 'When it is set and what it does' }] },
   { key: 'chapter', group: 'Quests', title: 'Chapters', enumName: 'E_StoryChapter',
     description: 'Story chapters (Prologue, Chapter 1…). Each quest chain belongs to a chapter; the order here is the story order.',
     extras: [{ key: 'levels', label: 'Levels', placeholder: 'e.g. 1–3' }, { key: 'summary', label: 'Summary', placeholder: 'What happens in this chapter' }] },
