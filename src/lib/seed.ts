@@ -54,6 +54,7 @@ export function buildSeed(): Record<Table, Row[]> {
   );
   const qt = {
     main: d('quest_type', 'Main', '#d9a75e'),
+    required: d('quest_type', 'Required', '#d07a3a'),
     side: d('quest_type', 'Side', '#6fb3d6'),
     daily: d('quest_type', 'Daily', '#8fbf74'),
     guild: d('quest_type', 'Guild', '#c294d6'),

@@ -411,7 +411,7 @@ function QuestMapInner() {
     if (edges.some((e) => e.source === c.source && e.target === c.target)) return;
     const t = nodeById.get(c.target);
     const typeName = t?.kind === 'chain' ? defs.get(chainById.get(t.chain_id ?? '')?.type ?? '')?.name ?? '' : '';
-    const kind: MapEdgeKind = t?.kind === 'chain' && typeName && !/main/i.test(typeName) ? 'side' : 'main';
+    const kind: MapEdgeKind = t?.kind === 'chain' && typeName && !/main|required/i.test(typeName) ? 'side' : 'main';
     insert('map_edges', { id: newId(), source: c.source, target: c.target, kind, label: '' });
   };
 
